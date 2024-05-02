@@ -44,7 +44,13 @@ defmodule Proxy do
       handle_rfc1929_auth(socket)
       Logger.info("Auth complete")
 
-      {cmd, addr, port} = parse_socks_req(socket)
+      # should always be :connect
+      {_cmd, addr, port} = parse_socks_req(socket)
+
+      # only allow services from our data-center
+      if InetCidr.contains?(InetCidr.parse_cidr!("10.69.69.0/24"), addr) do
+        # TODO: check against list of allowed Ip lists
+      end
 
       Logger.info(
         "Connecting #{:inet.ntoa(cip)}:#{cport} to #{:inet.ntoa(elem(addr, 1))}:#{port}"
@@ -81,9 +87,9 @@ defmodule Proxy do
       recv(socket, 2, fn <<5, cmd>> ->
         case cmd do
           1 -> :connect
-          2 -> :bind
-          3 -> :udp_assoc
-          _ -> throw_socks_error(socket, 0x07, "unknown/unsupported Command")
+          # 2 -> :bind
+          # 3 -> :udp_assoc
+          _ -> throw_socks_error(socket, 0x07, "unknown/unsupported command")
         end
       end),
       recv(socket, 2, fn <<0, atyp>> ->
@@ -91,14 +97,14 @@ defmodule Proxy do
           1 ->
             {:ipv4, recv(socket, 4, &(for(<<group <- &1>>, do: group) |> List.to_tuple()))}
 
-          3 ->
-            {:domain, recv(socket, 1, fn dlength -> recv(socket, dlength, & &1) end)}
+          # 3 ->
+          #  {:domain, recv(socket, 1, fn dlength -> recv(socket, dlength, & &1) end)}
 
-          4 ->
-            {:ipv6, recv(socket, 16, &(for(<<group::16 <- &1>>, do: group) |> List.to_tuple()))}
+          # 4 ->
+          #  {:ipv6, recv(socket, 16, &(for(<<group::16 <- &1>>, do: group) |> List.to_tuple()))}
 
           _ ->
-            throw_socks_error(socket, 0x08, "fake addr type")
+            throw_socks_error(socket, 0x08, "unknown/unsupported addr type")
         end
       end),
       recv(socket, 2, &:binary.decode_unsigned/1)
