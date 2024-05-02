@@ -16,7 +16,7 @@ jobs:
       ENOCHECKER_TEST_CHECKER_PORT: 5008
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
     - name: Set up Python 3.9
