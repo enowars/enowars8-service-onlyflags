@@ -22,6 +22,7 @@ defmodule Proxy.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:quantum, "~> 3.0"},
       {:inet_cidr, "~> 1.0.0"}
     ]
   end
