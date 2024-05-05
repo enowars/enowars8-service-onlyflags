@@ -5,7 +5,8 @@ defmodule Proxy.Application do
     children = [
       {Task.Supervisor, name: Proxy.TaskSupervisor},
       {Task, fn -> Proxy.accept(port) end},
-      Proxy.Scheduler
+      Proxy.Scheduler,
+      {Proxy.UserCache, name: Proxy.UserCache}
     ]
 
     opts = [strategy: :one_for_one, name: Proxy.Supervisor]

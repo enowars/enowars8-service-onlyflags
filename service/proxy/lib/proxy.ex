@@ -41,15 +41,24 @@ defmodule Proxy do
         throw("No acceptable Authentication method found")
       end
 
-      handle_rfc1929_auth(socket)
+      user_data = handle_rfc1929_auth(socket)
       Logger.info("Auth complete")
 
       # should always be :connect
       {_cmd, addr, port} = parse_socks_req(socket)
 
-      # only allow services from our data-center
-      if InetCidr.contains?(InetCidr.parse_cidr!("10.69.69.0/24"), addr) do
-        # TODO: check against list of allowed Ip lists
+      # only allow services from our data-center and allowed for account
+      if not InetCidr.contains?(InetCidr.parse_cidr!("10.69.69.0/24"), addr) and
+           (case user_data do
+              {:regular, restricted_spaces} ->
+                restricted_spaces
+                |> Enum.map(&InetCidr.contains?(&1, addr))
+                |> Enum.any?()
+
+              :premium ->
+                false
+            end) do
+        # TODO: throw error
       end
 
       Logger.info(
@@ -73,13 +82,16 @@ defmodule Proxy do
       throw("Illegal username")
     end
 
-    # TODO: Do auth correctly
-    if {"unreal", "hunter1"} !== {username, passwd} do
+    data = Proxy.UserCache.get_user(username, passwd)
+
+    if data == nil do
       :gen_tcp.send(socket, <<5, 1>>)
       throw("Auth failure")
     end
 
     :gen_tcp.send(socket, <<5, 0>>)
+
+    data
   end
 
   defp parse_socks_req(socket) do
