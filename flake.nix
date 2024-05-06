@@ -22,6 +22,12 @@
         packages = [
           pkgs.elixir_1_16
         ];
+        shellHook = ''
+          export PROFILE=debug
+          alias cw="cargo watch -w build.rs -w src -w templates -w assets  -x \"run\""
+
+          PS1="DEVELOP $PS1"
+        '';
       };
     });
   };
