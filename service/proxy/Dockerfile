@@ -45,8 +45,20 @@ WORKDIR /app
 # copy release to app container
 COPY --from=build /app/_build/prod/rel/proxy/ .
 COPY entrypoint.sh .
-RUN chown -R nobody: /app
-USER nobody
+
+# Create our mapped data volume endpoint
+RUN mkdir /data
+
+# Create a seperate user and chown new directories if necessary
+RUN addgroup --system service
+
+RUN adduser --system --ingroup service --uid 1000 service
+
+RUN chown -R service: /app
+
+RUN chown -R service: /data
+
+USER service
 
 ENV HOME=/app
 CMD ["bash", "/app/entrypoint.sh"]
