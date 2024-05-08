@@ -45,26 +45,42 @@ defmodule Proxy do
       user_data = handle_rfc1929_auth(socket)
       Logger.info("Auth complete")
 
-      # should always be :connect
-      {_cmd, addr, port} = parse_socks_req(socket)
+      # should always be :connect and {:domain, host}, we never want direct ip access
+      {:connect, {:domain, host}, port} = parse_socks_req(socket)
 
-      # only allow services from our data-center and allowed for account
-      if not InetCidr.contains?(InetCidr.parse_cidr!("10.69.69.0/24"), addr) and
-           (case user_data do
-              {:regular, restricted_spaces} ->
-                restricted_spaces
-                |> Enum.map(&InetCidr.contains?(&1, addr))
-                |> Enum.any?()
+      # don't allow connections to restricted services
+      if (case user_data do
+            {:regular, restricted_hosts} ->
+              Enum.member?(restricted_hosts, host)
 
-              :premium ->
-                false
-            end) do
-        # TODO: throw error
+            :premium ->
+              false
+          end) do
+        throw_socks_error(
+          socket,
+          2,
+          "not allowed to connect to network #{host}:#{port}"
+        )
       end
 
-      Logger.info(
-        "Connecting #{:inet.ntoa(cip)}:#{cport} to #{:inet.ntoa(elem(addr, 1))}:#{port}"
-      )
+      Logger.info("Connecting #{:inet.ntoa(cip)}:#{cport} to #{host}:#{port}")
+
+      # TODO: restrict network interface [bind_to_device: "something"]
+      case :gen_tcp.connect(host, port, [:binary, packet: :raw], 5) do
+        {:ok, conn} ->
+          try do
+            {:ok, {conaddr, conport}} = :inet.sockname(conn)
+            Logger.info("local sock: #{:inet.ntoa(conaddr)}:#{conport}")
+          after
+            :gen_tcp.close(conn)
+          end
+
+        {:error, :econnrefused} ->
+          throw_socks_error(socket, 5, "connection refused")
+
+        {:error, :etimedout} ->
+          throw_socks_error(socket, 6, "Timed out")
+      end
     catch
       e ->
         Logger.warning("Disconnected from client(#{:inet.ntoa(cip)}:#{cport}): #{e}")
@@ -107,11 +123,14 @@ defmodule Proxy do
       end),
       recv(socket, 2, fn <<0, atyp>> ->
         case atyp do
-          1 ->
-            {:ipv4, recv(socket, 4, &(for(<<group <- &1>>, do: group) |> List.to_tuple()))}
+          # 1 ->
+          #  {:ipv4, recv(socket, 4, &(for(<<group <- &1>>, do: group) |> List.to_tuple()))}
 
-          # 3 ->
-          #  {:domain, recv(socket, 1, fn dlength -> recv(socket, dlength, & &1) end)}
+          3 ->
+            {:domain,
+             recv(socket, 1, fn <<dlength>> ->
+               recv(socket, dlength, & &1)
+             end)}
 
           # 4 ->
           #  {:ipv6, recv(socket, 16, &(for(<<group::16 <- &1>>, do: group) |> List.to_tuple()))}
