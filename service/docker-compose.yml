@@ -24,7 +24,7 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./data/db/:/var/lib/mysql:Z
     environment:
-      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: true
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "true"
     networks:
       - db
 
