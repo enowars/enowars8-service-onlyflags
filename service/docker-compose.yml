@@ -7,6 +7,12 @@ services:
     ports:
       - 1080
 
+  web:
+    build: ./web/
+
+    ports:
+      - 9145:80
+
   db:
     image: mariadb:latest
     volumes:
