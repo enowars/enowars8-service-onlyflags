@@ -16,7 +16,14 @@ defmodule Proxy.UserCache do
         row =
           if username == "alice",
             do: nil,
-            else: %{password: "hunter1", access: {:regular, []}}
+            else: %{
+              password: "hunter1",
+              access:
+                if(username == "unreal",
+                  do: :premium,
+                  else: {:regular, ["hunter"]}
+                )
+            }
 
         if row == nil do
           nil
