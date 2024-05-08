@@ -1,0 +1,4 @@
+data/proxy/
+!data/proxy/.gitkeep
+data/db/
+!data/db/.gitkeep
