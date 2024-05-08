@@ -2,10 +2,16 @@ version: '3'
 services:
   proxy:
     build: ./proxy/
-    # The code should be copied into the container using COPY.
-    # Mount the data folder writable, so that information can be persisted across restarts.
     volumes:
       - ./data/proxy:/data:rw
-    # Define the port mapping (external:internal port)
     ports:
       - 1080
+
+  db:
+    image: mariadb:latest
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./data/db/:/var/lib/mysql:Z
+    environment:
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: true
+
