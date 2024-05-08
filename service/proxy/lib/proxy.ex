@@ -17,14 +17,15 @@ defmodule Proxy do
   defp recv(socket, length, func) do
     try do
       {:ok, bytes} = :gen_tcp.recv(socket, length)
+      # Logger.info("#{Base.encode16(bytes)}")
       func.(bytes)
     rescue
       e in FunctionClauseError ->
-        Logger.warning("#{e}")
+        Logger.warning("#{inspect(e)}")
         throw("protocoll not followed")
 
       e in MatchError ->
-        Logger.warning("#{e}")
+        Logger.warning("#{inspect(e)}")
         throw("protocoll not followed")
     end
   end
