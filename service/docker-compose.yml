@@ -6,12 +6,17 @@ services:
       - ./data/proxy:/data:rw
     ports:
       - 1080
+    networks:
+      - db
+      - internal_net
 
   web:
     build: ./web/
 
     ports:
       - 9145:80
+    networks:
+      - db
 
   db:
     image: mariadb:latest
@@ -20,4 +25,16 @@ services:
       - ./data/db/:/var/lib/mysql:Z
     environment:
       MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: true
+    networks:
+      - db
+
+networks:
+  db:
+
+  internal_net:
+    name: test
+    internal: true
+    attachable: true
+    driver_opts:
+      'com.docker.network.container_iface_prefix': "asd"
 
