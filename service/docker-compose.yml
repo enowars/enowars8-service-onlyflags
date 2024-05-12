@@ -20,7 +20,7 @@ services:
     image: mariadb:latest
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./data/:/var/lib/mysql:Z
+      # - ./data/:/var/lib/mysql:Z
     environment:
       MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "true"
     networks:
