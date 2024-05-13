@@ -21,6 +21,7 @@
       default = pkgs.mkShell {
         packages = [
           pkgs.elixir_1_16
+          pkgs.cargo
         ];
         shellHook = ''
           export PROFILE=debug
