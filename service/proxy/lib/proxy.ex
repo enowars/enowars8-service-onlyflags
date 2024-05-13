@@ -65,8 +65,19 @@ defmodule Proxy do
 
       Logger.info("Connecting #{:inet.ntoa(cip)}:#{cport} to #{host}:#{port}")
 
-      # TODO: restrict network interface [bind_to_device: "something"]
-      case :gen_tcp.connect(host, port, [:binary, packet: :raw], 5) do
+      device = Application.fetch_env!(:proxy, :device)
+
+      case :gen_tcp.connect(
+             host,
+             port,
+             [
+               # :binary,
+               # packet: :raw,
+               bind_to_device: device,
+               active: false
+             ],
+             5
+           ) do
         {:ok, conn} ->
           try do
             {:ok, {conaddr, conport}} = :inet.sockname(conn)
