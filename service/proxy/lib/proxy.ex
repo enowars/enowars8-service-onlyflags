@@ -95,18 +95,18 @@ defmodule Proxy do
     passwd = recv(socket, 1, fn <<npasswd>> -> recv(socket, npasswd, & &1) end)
 
     if not ([username, passwd] |> Enum.map(&String.valid?/1) |> Enum.all?()) do
-      :gen_tcp.send(socket, <<5, 1>>)
+      :gen_tcp.send(socket, <<1, 1>>)
       throw("Illegal username")
     end
 
     data = Proxy.UserCache.get_user(username, passwd)
 
     if data == nil do
-      :gen_tcp.send(socket, <<5, 1>>)
+      :gen_tcp.send(socket, <<1, 1>>)
       throw("Auth failure")
     end
 
-    :gen_tcp.send(socket, <<5, 0>>)
+    :gen_tcp.send(socket, <<1, 0>>)
 
     data
   end
