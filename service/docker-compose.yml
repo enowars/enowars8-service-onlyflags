@@ -3,10 +3,12 @@ services:
   proxy:
     build: ./proxy/
     ports:
-      - 1080
+      - "1080:1080"
     networks:
       - db
       - internal_net
+    cap_add:
+      - CAP_NET_RAW
 
   web:
     build: ./web/
