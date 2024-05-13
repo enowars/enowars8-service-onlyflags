@@ -26,6 +26,12 @@ services:
     networks:
       - db
 
+  echo:
+    build: ./echo/
+    networks:
+      - internal_net
+
+
 networks:
   db:
 
