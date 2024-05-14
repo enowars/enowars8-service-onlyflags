@@ -22,6 +22,8 @@
         packages = [
           pkgs.elixir_1_16
           pkgs.cargo
+          pkgs.netcat
+          pkgs.curl
         ];
         shellHook = ''
           export PROFILE=debug
