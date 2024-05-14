@@ -3,12 +3,14 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
   };
 
   outputs = {
-    self,
     systems,
     nixpkgs,
+    treefmt-nix,
+    ...
   }: let
     # Small tool to iterate over each systems
     eachSystem = f:
@@ -16,6 +18,16 @@
         f (import nixpkgs {
           inherit system;
         }));
+    treefmtEval = eachSystem (pkgs:
+      treefmt-nix.lib.evalModule pkgs ({...}: {
+        projectRootFile = "flake.nix";
+        programs = {
+          alejandra.enable = true;
+          rustfmt.enable = true;
+          deadnix.enable = true;
+        };
+        settings.formatter.alejandra.excludes = ["2configs/vscode/extensions.nix"];
+      }));
   in {
     devShells = eachSystem (pkgs: {
       default = pkgs.mkShell {
@@ -33,5 +45,7 @@
         '';
       };
     });
+
+    formatter = eachSystem (pkgs: treefmtEval.${pkgs.system}.config.build.wrapper);
   };
 }
