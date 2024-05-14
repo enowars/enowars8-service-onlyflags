@@ -111,18 +111,26 @@ defmodule Proxy do
   end
 
   defp loop_sender(socket, conn) do
-    receive do
-      {:tcp, s, data} ->
-        case s do
-          ^socket ->
-            :gen_tcp.send(conn, data)
+    if (receive do
+          {:tcp, s, data} ->
+            case s do
+              ^socket ->
+                :gen_tcp.send(conn, data)
 
-          ^conn ->
-            :gen_tcp.send(socket, data)
-        end
+              ^conn ->
+                :gen_tcp.send(socket, data)
+            end
+
+            true
+
+          {:tcp_closed, _s} ->
+            false
+        end) do
+      loop_sender(socket, conn)
+    else
+      :gen_tcp.close(conn)
+      throw("connection closed")
     end
-
-    loop_sender(socket, conn)
   end
 
   defp handle_rfc1929_auth(socket) do
