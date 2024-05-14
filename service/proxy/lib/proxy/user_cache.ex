@@ -13,6 +13,7 @@ defmodule Proxy.UserCache do
     user =
       if maybe_user == nil do
         # TODO: get user from DB
+        """
         row =
           if username == "alice",
             do: nil,
@@ -24,6 +25,16 @@ defmodule Proxy.UserCache do
                   else: {:regular, ["hunter"]}
                 )
             }
+        """
+
+        {:ok, %MyXQL.Result{rows: rows}} =
+          MyXQL.query(:myxql, "SELECT password, plan FROM user WHERE username = ?", [username])
+
+        row =
+          case rows do
+            [user] -> upsert_row_into_cache_value([Enum.at(user, 0), Enum.at(user, 1)], nil)
+            [] -> nil
+          end
 
         if row == nil do
           nil
@@ -40,6 +51,35 @@ defmodule Proxy.UserCache do
     else
       user.access
     end
+  end
+
+  def update_user_cache() do
+    {:ok, %MyXQL.Result{rows: rows}} =
+      MyXQL.query(:myxql, "SELECT username, password, plan FROM user")
+
+    prevs = GenServer.call(__MODULE__, :get_all)
+
+    GenServer.cast(
+      __MODULE__,
+      {:put_all,
+       rows
+       |> Enum.map(&upsert_row_into_cache_value([&1[1], &1[2]], Map.get(prevs, &1[0])))
+       |> Map.new()}
+    )
+  end
+
+  # temporary solution until we have everything in the db
+  defp upsert_row_into_cache_value([password, plan], prev) do
+    %{
+      password: password,
+      access:
+        if prev == nil do
+          Map.new()
+        else
+          premium = plan == "regular"
+          Map.put(prev.access, "flags", premium)
+        end
+    }
   end
 
   # GenServer impls
@@ -59,4 +99,8 @@ defmodule Proxy.UserCache do
   @impl true
   def handle_cast({:put, username, data}, state),
     do: {:noreply, Map.put(state, username, data)}
+
+  @impl true
+  def handle_cast({:put_all, data}, _state),
+    do: {:noreply, data}
 end

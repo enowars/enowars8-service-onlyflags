@@ -23,7 +23,8 @@ defmodule Proxy.MixProject do
   defp deps do
     [
       {:quantum, "~> 3.0"},
-      {:inet_cidr, "~> 1.0.0"}
+      {:inet_cidr, "~> 1.0.0"},
+      {:myxql, "~> 0.6.0"}
     ]
   end
 end
