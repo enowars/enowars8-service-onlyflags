@@ -9,6 +9,8 @@ services:
       - internal_net
     cap_add:
       - CAP_NET_RAW
+    depends_on:
+      - db
 
   web:
     build: ./web/
