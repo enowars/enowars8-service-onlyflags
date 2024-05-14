@@ -32,6 +32,7 @@
     devShells = eachSystem (pkgs: {
       default = pkgs.mkShell {
         packages = [
+          pkgs.docker-compose_1
           pkgs.elixir_1_16
           pkgs.cargo
           pkgs.netcat
