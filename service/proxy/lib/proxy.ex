@@ -68,23 +68,39 @@ defmodule Proxy do
       device = Application.fetch_env!(:proxy, :device)
 
       case :gen_tcp.connect(
-             host,
+             host |> to_charlist(),
              port,
              [
-               # :binary,
-               # packet: :raw,
+               :binary,
+               packet: :raw,
                bind_to_device: device,
                active: false
-             ],
-             5
+             ]
            ) do
         {:ok, conn} ->
           try do
             {:ok, {conaddr, conport}} = :inet.sockname(conn)
             Logger.info("local sock: #{:inet.ntoa(conaddr)}:#{conport}")
+
+            :gen_tcp.send(
+              socket,
+              <<5, 0, 0, 1>> <>
+                (conaddr
+                 |> Tuple.to_list()
+                 |> Enum.map(&:binary.encode_unsigned/1)
+                 |> Enum.join()) <>
+                :binary.encode_unsigned(conport)
+            )
+
+            :inet.setopts(socket, active: true)
+            :inet.setopts(conn, active: true)
+            loop_sender(socket, conn)
           after
             :gen_tcp.close(conn)
           end
+
+        {:error, :ehostunreach} ->
+          throw_socks_error(socket, 4, "host unreachable")
 
         {:error, :econnrefused} ->
           throw_socks_error(socket, 5, "connection refused")
@@ -98,6 +114,21 @@ defmodule Proxy do
     after
       :gen_tcp.close(socket)
     end
+  end
+
+  defp loop_sender(socket, conn) do
+    receive do
+      {:tcp, s, data} ->
+        case s do
+          ^socket ->
+            :gen_tcp.send(conn, data)
+
+          ^conn ->
+            :gen_tcp.send(socket, data)
+        end
+    end
+
+    loop_sender(socket, conn)
   end
 
   defp handle_rfc1929_auth(socket) do
