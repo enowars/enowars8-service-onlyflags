@@ -10,5 +10,7 @@ CREATE TABLE user(
   username VARCHAR(20) NOT NULL UNIQUE,
   password VARCHAR(20) NOT NULL,
   plan ENUM('premium', 'regular') NOT NULL,
-  created DATETIME NOT NULL
+  created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+INSERT INTO user(username,password, plan) VALUES ('unreal', 'hunter1', 'regular');
