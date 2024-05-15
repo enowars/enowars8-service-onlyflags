@@ -63,7 +63,13 @@ defmodule Proxy.UserCache do
       __MODULE__,
       {:put_all,
        rows
-       |> Enum.map(&upsert_row_into_cache_value([&1[1], &1[2]], Map.get(prevs, &1[0])))
+       |> Enum.map(
+         &{Enum.at(&1, 0),
+          upsert_row_into_cache_value(
+            [Enum.at(&1, 1), Enum.at(&1, 2)],
+            Map.get(prevs, Enum.at(&1, 0))
+          )}
+       )
        |> Map.new()}
     )
   end
