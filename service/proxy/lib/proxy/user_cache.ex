@@ -12,21 +12,6 @@ defmodule Proxy.UserCache do
 
     user =
       if maybe_user == nil do
-        # TODO: get user from DB
-        """
-        row =
-          if username == "alice",
-            do: nil,
-            else: %{
-              password: "hunter1",
-              access:
-                if(username == "unreal",
-                  do: :premium,
-                  else: {:regular, ["hunter"]}
-                )
-            }
-        """
-
         {:ok, %MyXQL.Result{rows: rows}} =
           MyXQL.query(:myxql, "SELECT password, plan FROM user WHERE username = ?", [username])
 
