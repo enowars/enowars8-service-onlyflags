@@ -25,6 +25,7 @@
           alejandra.enable = true;
           rustfmt.enable = true;
           deadnix.enable = true;
+          mix-format.enable = true;
         };
         settings.formatter.alejandra.excludes = ["2configs/vscode/extensions.nix"];
       }));
@@ -36,6 +37,7 @@
           pkgs.elixir_1_16
           pkgs.cargo
           pkgs.netcat
+          pkgs.enochecker-test
           pkgs.curl
         ];
         shellHook = ''
