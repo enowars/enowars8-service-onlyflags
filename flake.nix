@@ -4,12 +4,14 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     treefmt-nix.url = "github:numtide/treefmt-nix";
+    poetry2nix.url = "github:bchmnn/poetry2nix";
   };
 
   outputs = {
     systems,
     nixpkgs,
     treefmt-nix,
+    poetry2nix,
     ...
   }: let
     # Small tool to iterate over each systems
@@ -30,15 +32,21 @@
         settings.formatter.alejandra.excludes = ["2configs/vscode/extensions.nix"];
       }));
   in {
-    devShells = eachSystem (pkgs: {
+    devShells = eachSystem (pkgs: let
+      inherit (poetry2nix.lib.mkPoetry2Nix {inherit pkgs;}) mkPoetryEnv;
+    in {
       default = pkgs.mkShell {
         packages = [
           pkgs.docker-compose_1
           pkgs.elixir_1_16
           pkgs.cargo
           pkgs.netcat
-          pkgs.enochecker-test
           pkgs.curl
+          (mkPoetryEnv {projectDir = ./checker;})
+          pkgs.poetry
+          pkgs.php83
+          pkgs.php83Packages.composer
+          pkgs.openssl
         ];
         shellHook = ''
           export PROFILE=debug
