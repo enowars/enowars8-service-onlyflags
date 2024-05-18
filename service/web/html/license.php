@@ -7,7 +7,7 @@ use Firebase\JWT\Key;
 if ($_SERVER['REQUEST_METHOD'] === "POST") {
   if (array_key_exists('key', $_POST)) {
   
-    $publicKey = file_get_contents('../publickey.crt');
+    $publicKey = file_get_contents('../jwt_pub.crt');
     try {
       $jwt = JWT::decode($_POST['key'], new Key($publicKey, 'RS256'));
       $con = require '../db.php';

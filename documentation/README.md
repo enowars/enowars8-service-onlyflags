@@ -1,5 +1,14 @@
 # OnlyFlags
 
+## Generate keys
+
+```sh
+openssl genrsa -out jwt_priv.pem 2048
+openssl rsa -in jwt_priv.pem -pubout -out jwt_pub.crt
+mv jwt_priv.pem checker/
+mv jwt_pub.pem service/web/
+```
+
 ## Basic Usage
 
 after creating an account the user can access the internal_net with

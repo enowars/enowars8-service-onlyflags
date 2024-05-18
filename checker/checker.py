@@ -37,7 +37,7 @@ SERVICE_PORT = 9145
 checker = Enochecker("onlyflags", SERVICE_PORT)
 app = lambda: checker.app
 
-with open('keypair.pem', 'r') as file:
+with open('jwt_priv.pem', 'r') as file:
     priv_key = file.read()
 
 
