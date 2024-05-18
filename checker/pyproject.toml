@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "onlyflags_checker"
+version = "0.1.0"
+description = ""
+authors = ["Alexander Gaus <unreal@rtinf.net>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+enochecker3 = "^0.8.1"
+pyjwt = {extras = ["crypto"], version = "^2.8.0"}
+
+[tool.poetry.group.dev.dependencies]
+enochecker-cli = "^0.7.0"
+enochecker-test = "^0.9.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
