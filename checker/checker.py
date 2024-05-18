@@ -99,7 +99,7 @@ async def putflag_premiumkv(
     await conn.register_user(username, password, True)
 
     # TODO: Put actual flag into a kv store
-    
+
     # Save the generated values for the associated getflag() call.
     await db.set("userdata", (username, password, noteId))
 
@@ -134,6 +134,7 @@ async def getflag_premiumkv(
     logger.debug(f"Sending exit command")
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
+"""
         
 @checker.putnoise(0)
 async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
@@ -147,39 +148,15 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     password = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
     )
-    randomNote = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=36)
-    )
 
     # Register another user
     await conn.register_user(username, password)
 
-    # Now we need to login
-    await conn.login_user(username, password)
+    # TODO: Put some noise into non premium kv
 
-    # Finally, we can post our note!
-    logger.debug(f"Sending command to save a note")
-    conn.writer.write(f"set {randomNote}\n".encode())
-    await conn.writer.drain()
-    await conn.reader.readuntil(b"Note saved! ID is ")
+    await db.set("userdata", (username, password))
 
-    try:
-        noteId = (await conn.reader.readuntil(b"!\n>")).rstrip(b"!\n>").decode()
-    except Exception as ex:
-        logger.debug(f"Failed to retrieve note: {ex}")
-        raise MumbleException("Could not retrieve NoteId")
-
-    assert_equals(len(noteId) > 0, True, message="Empty noteId received")
-
-    logger.debug(f"{noteId}")
-
-    # Exit!
-    logger.debug(f"Sending exit command")
-    conn.writer.write(f"exit\n".encode())
-    await conn.writer.drain()
-
-    await db.set("userdata", (username, password, noteId, randomNote))
-        
+"""
 @checker.getnoise(0)
 async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
     try:
