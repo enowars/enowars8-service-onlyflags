@@ -12,3 +12,4 @@ CREATE TABLE user(
   plan ENUM('premium', 'regular') NOT NULL,
   created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+GRANT UPDATE(plan) on user TO "web";

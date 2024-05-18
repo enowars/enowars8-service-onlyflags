@@ -1,0 +1,7 @@
+{
+    "name": "onlyflags/web",
+    "type": "project",
+    "require": {
+        "firebase/php-jwt": "^6.10"
+    }
+}

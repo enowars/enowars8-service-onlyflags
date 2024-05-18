@@ -1,17 +1,22 @@
 <?php
-$con = new PDO("mysql:host=db;dbname=pod", "web");
+
+$con = require '../db.php';
 $rows = $con->query("SELECT * FROM user");
+
 if ($_SERVER['REQUEST_METHOD'] === "POST") {
-if (array_key_exists('username', $_POST) && array_key_exists('password', $_POST) && preg_match('/^[a-zA-Z0-9-+=\/]{1,45}$/', $_POST['username']) && preg_match('/^[a-zA-Z0-9-+=\/]{1,45}$/', $_POST['password']))
-  try {
-    $query = $con->prepare("INSERT INTO user(username, password, plan) VALUES (?,?,'regular')");
-    $query->bindParam(1, $_POST['username']);
-    $query->bindParam(2, $_POST['password']);
-    $query->execute();
-    header('Location: /?success');
-    exit();
-  } catch (PDOException $e) {
-  }
+  if (array_key_exists('username', $_POST)
+      && array_key_exists('password', $_POST)
+      && preg_match('/^[a-zA-Z0-9-+=\/]{1,45}$/', $_POST['username'])
+      && preg_match('/^[a-zA-Z0-9-+=\/]{1,45}$/', $_POST['password']))
+    try {
+      $query = $con->prepare("INSERT INTO user(username, password, plan) VALUES (?,?,'regular')");
+      $query->bindParam(1, $_POST['username']);
+      $query->bindParam(2, $_POST['password']);
+      $query->execute();
+      header('Location: /?success');
+      exit();
+    } catch (PDOException) {
+    }
   header('Location: /?error');
   exit();
 }
@@ -33,7 +38,7 @@ if (array_key_exists('username', $_POST) && array_key_exists('password', $_POST)
 	SUCCESS
 <?php } elseif (array_key_exists('error', $_GET)) { ?>
 	ERROR
-<?php } var_dump($rows->fetchAll(PDO::FETCH_ASSOC));?>
+<?php } var_dump($rows->fetchAll(PDO::FETCH_ASSOC)); ?>
   </body>
 </html>
 
