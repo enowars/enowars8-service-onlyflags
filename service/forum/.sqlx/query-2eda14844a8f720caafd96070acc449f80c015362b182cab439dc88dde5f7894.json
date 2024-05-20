@@ -1,0 +1,25 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT DISTINCT thread FROM post",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | MULTIPLE_KEY | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 80
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2eda14844a8f720caafd96070acc449f80c015362b182cab439dc88dde5f7894"
+}

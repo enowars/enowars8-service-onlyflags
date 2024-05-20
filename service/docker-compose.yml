@@ -29,15 +29,25 @@ services:
       MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "true"
     networks:
       - db
+      - db2
 
   echo:
     build: ./echo/
     networks:
       - internal_net
 
+  premium-forum:
+    build: ./forum/
+    environment:
+      DATABASE_URL: "mysql://premium_forum@db/premium_forum"
+    networks:
+      - db2
+      - internal_net
+
 
 networks:
   db:
+  db2:
 
   internal_net:
     name: test

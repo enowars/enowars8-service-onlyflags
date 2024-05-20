@@ -1,0 +1,25 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT content FROM post WHERE thread = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 200
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ce77581182e71c926d27dd6ae3eef7b536d930d28e01e0e2742e5683f1ee4662"
+}
