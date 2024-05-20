@@ -5,6 +5,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     poetry2nix.url = "github:bchmnn/poetry2nix";
+    naersk.url = "github:nix-community/naersk";
   };
 
   outputs = {
@@ -12,6 +13,7 @@
     nixpkgs,
     treefmt-nix,
     poetry2nix,
+    naersk,
     ...
   }: let
     # Small tool to iterate over each systems
@@ -31,18 +33,42 @@
         };
         settings.formatter.alejandra.excludes = ["2configs/vscode/extensions.nix"];
       }));
+
+    naersk' = eachSystem (pkgs: pkgs.callPackage naersk {});
   in {
     devShells = eachSystem (pkgs: let
       inherit (poetry2nix.lib.mkPoetry2Nix {inherit pkgs;}) mkPoetryEnv;
+      sqlx-cli = naersk'.${pkgs.system}.buildPackage rec {
+        pname = "sqlx-cli";
+        version = "0.7.3";
+
+        src = pkgs.fetchCrate {
+          inherit pname version;
+          sha256 = "sha256-QC1FjBTcbRrWBp12/9CVJ/9L3YMIOAG7k1XqagPv7XQ=";
+        };
+
+        buildInputs = [pkgs.openssl];
+        nativeBuildInputs = [pkgs.pkg-config];
+
+        # TODO: find better way to force sqlite
+        #cargoBuildOptions = s: ["--features" "sqlite"] ++ s;
+      };
     in {
       default = pkgs.mkShell {
         packages = [
           pkgs.docker-compose_1
           pkgs.elixir_1_16
           pkgs.cargo
+          pkgs.clippy
+          pkgs.rust-analyzer
+          pkgs.rustfmt
+          sqlx-cli
           pkgs.netcat
           pkgs.curl
-          (mkPoetryEnv {projectDir = ./checker;})
+          (mkPoetryEnv {
+            projectDir = ./checker;
+            preferWheels = true;
+          })
           pkgs.poetry
           pkgs.php83
           pkgs.php83Packages.composer
