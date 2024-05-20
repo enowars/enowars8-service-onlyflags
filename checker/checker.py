@@ -5,7 +5,7 @@ import string
 
 import jwt
 import httpx
-
+from python_socks.async_.asyncio import Proxy
 
 from typing import Optional
 from logging import LoggerAdapter
@@ -94,14 +94,31 @@ async def putflag_premiumkv(
     password: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
     )
+    thread_id: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
 
     # Register a new user
     await conn.register_user(username, password, True)
 
-    # TODO: Put actual flag into a kv store
+    proxy = Proxy.from_url(f"socks5://{username}:{password}@{task.address}", rdns=True)
+    sock = await proxy.connect('premium-forum', 1337)
+    rd, wr = await asyncio.open_connection(
+        host=None,
+        port=None,
+        sock=sock,
+    )
+
+    await rd.readuntil(b"\n>")
+    wr.write(f"join {thread_id}".encode())
+    await wr.drain()
+    res = await rd.readuntil(b"\n>")
+    assert_in("changed thread to", res, "Premium Forum non-functional")
+
+    # TODO: finish this
 
     # Save the generated values for the associated getflag() call.
-    await db.set("userdata", (username, password, noteId))
+    await db.set("userdata", (username, password, thread_id))
 
     return username
 
