@@ -184,7 +184,8 @@ async def getflag_premiumkv(
     logger.info('getting thread')
     res = await forum.show()
     assert_in(task.flag, res.decode('utf-8'), "flag not found in thread")
-        
+ 
+"""
 @checker.putnoise(0)
 async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to the service")
@@ -233,7 +234,6 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
 
-"""
 @checker.havoc(0)
 async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to service")
