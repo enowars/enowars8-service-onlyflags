@@ -42,13 +42,13 @@ async fn handle_client(mut socket: TcpStream, pool: MySqlPool) -> anyhow::Result
                 let join = join["join".len()..].trim();
                 if join.is_empty() {
                     wr.write_all(b"Please specify a thread.\n").await?;
-                    continue;
-                }
-                thread = Option::Some(join.to_owned());
+                } else {
+                    thread = Option::Some(join.to_owned());
 
-                wr.write_all(b"changed thread to ").await?;
-                wr.write_all(join.as_bytes()).await?;
-                wr.write_all(b"\n").await?;
+                    wr.write_all(b"changed thread to ").await?;
+                    wr.write_all(join.as_bytes()).await?;
+                    wr.write_all(b"\n").await?;
+                }
             }
             show if show.trim().to_lowercase() == "show" => match &thread {
                 Some(thread) => {
@@ -73,16 +73,20 @@ async fn handle_client(mut socket: TcpStream, pool: MySqlPool) -> anyhow::Result
                 let post = post["post".len()..].trim();
                 if post.is_empty() {
                     wr.write_all(b"No post content given.\n").await?;
-                    continue;
-                }
-                match &thread {
-                    Some(thread) => {
-                        sqlx::query!("INSERT INTO post(thread,content) VALUES(?,?)", thread, post)
+                } else {
+                    match &thread {
+                        Some(thread) => {
+                            sqlx::query!(
+                                "INSERT INTO post(thread,content) VALUES(?,?)",
+                                thread,
+                                post
+                            )
                             .execute(&pool)
                             .await?;
-                    }
-                    None => {
-                        wr.write_all(b"No thread was selected.\n").await?;
+                        }
+                        None => {
+                            wr.write_all(b"No thread was selected.\n").await?;
+                        }
                     }
                 }
             }
