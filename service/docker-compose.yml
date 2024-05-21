@@ -43,6 +43,8 @@ services:
     networks:
       - db2
       - internal_net
+    depends_on:
+      - db
 
 
 networks:
