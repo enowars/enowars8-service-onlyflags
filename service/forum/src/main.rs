@@ -91,6 +91,7 @@ async fn handle_client(mut socket: TcpStream, pool: MySqlPool) -> anyhow::Result
             }
         }
         wr.write_all(b"\n>").await?;
+        wr.flush().await?;
     }
     Ok(())
 }
