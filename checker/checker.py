@@ -151,7 +151,7 @@ async def putflag_premiumkv(
     # Register a new user
     await conn.register_user(username, password, True)
 
-    forum = ForumConnection(host, username, password, 'premium-forum')
+    forum = ForumConnection(task.address, username, password, 'premium-forum')
     await forum.connect()
 
     logger.info(f"joining thread {thread_id}")
