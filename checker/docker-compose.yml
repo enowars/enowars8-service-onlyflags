@@ -23,8 +23,8 @@ services:
 
   onlyflags-mongo:
     image: mongo
-      #volumes:
-      #- ./data:/data/db
+    volumes:
+      - ./data:/data/db
     environment:
       MONGO_INITDB_ROOT_USERNAME: onlyflags_checker
       MONGO_INITDB_ROOT_PASSWORD: onlyflags_checker
