@@ -22,6 +22,7 @@ services:
 
   db:
     image: mariadb:latest
+    command: --event-scheduler=ON
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./data/:/var/lib/mysql:Z
