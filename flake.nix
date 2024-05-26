@@ -70,11 +70,10 @@
             preferWheels = true;
           })
           pkgs.poetry
-          pkgs.php83
-          pkgs.php83Packages.composer
           pkgs.openssl
           pkgs.php83Packages.composer
           pkgs.php83
+          pkgs.graphviz
         ];
         shellHook = ''
           export PROFILE=debug
