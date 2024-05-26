@@ -1,0 +1,13 @@
+digraph G {
+  dir=forward;
+  node[shape=ellipse];
+  edge[dir=back]
+  "outer network"[shape=house];
+  proxy -> "outer network";
+  web ->  "outer network";
+  db -> proxy;
+  db -> web;
+  premium_forum -> proxy;
+  db -> premium_forum;
+  "echo" -> proxy;
+}

@@ -1,6 +1,9 @@
 # OnlyFlags
 
-## Generate keys
+## Service topology
+![service topology](../assets/topology.svg)
+
+## Generate keys for licensing
 
 ```sh
 openssl genrsa -out jwt_priv.pem 2048
