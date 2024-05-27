@@ -67,7 +67,7 @@ defmodule Proxy.UserCache do
         if prev == nil do
           Map.new()
         else
-          premium = plan == "regular"
+          premium = plan == "premium"
           Map.put(prev.access, "premium-forum", premium)
         end
     }
