@@ -42,14 +42,15 @@ defmodule Proxy do
         throw("No acceptable Authentication method found")
       end
 
-      restricted_hosts = handle_rfc1929_auth(socket)
+      hosts_acls = handle_rfc1929_auth(socket)
       Logger.info("Auth complete")
 
       # should always be :connect and {:domain, host}, we never want direct ip access
       {:connect, {:domain, host}, port} = parse_socks_req(socket)
 
       # don't allow connections to restricted services
-      if Enum.member?(restricted_hosts, host) do
+      service_permissions = Map.get(hosts_acls, host)
+      if service_permissions != nil and not service_permissions do
         throw_socks_error(
           socket,
           2,
