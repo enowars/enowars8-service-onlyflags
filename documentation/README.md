@@ -16,7 +16,7 @@ mv jwt_pub.pem service/web/
 
 after creating an account the user can access the internal_net with
 ```sh
-ncat --proxy $TARGET_IP --proxy-type socks5 --proxy-auth $USER:$PW $SERVICE $SERVICE_PORT
+ncat --proxy $TARGET_IP --proxy-type socks5 --proxy-dns remote --proxy-auth $USER:$PW $SERVICE $SERVICE_PORT
 ```
 
 To test the access the user can use the `echo` service with the port `1337`.
