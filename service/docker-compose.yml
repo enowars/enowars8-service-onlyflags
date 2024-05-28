@@ -5,8 +5,9 @@ services:
     ports:
       - "1080:1080"
     networks:
-      - db
-      - internal_net
+      db:
+        ipv4_address: 10.6.0.4
+      internal_net:
     cap_add:
       - CAP_NET_RAW
     depends_on:
@@ -18,7 +19,9 @@ services:
     ports:
       - 9145:80
     networks:
-      - db
+      db:
+        ipv4_address: 10.6.0.3
+
 
   db:
     image: mariadb:latest
@@ -29,8 +32,10 @@ services:
     environment:
       MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "true"
     networks:
-      - db
-      - db2
+      db:
+        ipv4_address: 10.6.0.2
+      db2:
+        ipv4_address: 10.5.0.2
 
   echo:
     build: ./echo/
@@ -42,15 +47,22 @@ services:
     environment:
       DATABASE_URL: "mysql://premium_forum@db/premium_forum"
     networks:
-      - db2
-      - internal_net
+      db2:
+        ipv4_address: 10.5.0.3
+      internal_net:
     depends_on:
       - db
 
 
 networks:
   db:
+    ipam:
+      config:
+        - subnet: 10.6.0.0/16
   db2:
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
 
   internal_net:
     name: test
