@@ -3,6 +3,7 @@ require '../vendor/autoload.php';
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
+use Firebase\JWT\SignatureInvalidException;
 
 if ($_SERVER['REQUEST_METHOD'] === "POST") {
   if (array_key_exists('key', $_POST)) {
@@ -24,24 +25,28 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
   exit();
 }
 
+$title = "OnlyFlags license activation";
+require '../header.php';
 ?>
-<html lang="de">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OnlyFlags registration</title>
-  </head>
-  <body>
+<div class="form-box">
+	<h5>Activate License</h5>
 	<form action="/license.php" method="POST">
-	<label for="key">Key:</label><input id="key" name="key"><br>
-	<input type="submit" value="Register">
+		<div class="form-element">
+			<label for="key">Key:</label><br>
+			<input id="key" name="key"><br>
+		</div>
+		<div class="form-element">
+			<input type="submit" value="Submit">
+		</div>
 	</form>
-<?php if (array_key_exists('success', $_GET)) { ?>
-	SUCCESS
-<?php } elseif (array_key_exists('error', $_GET)) { ?>
-	ERROR
-<?php } ?>
-  </body>
-</html>
-
-
+	<?php if (array_key_exists('success', $_GET)) { ?>
+	<div class="form-message success">license activated!</div>
+	<?php } elseif (array_key_exists('error', $_GET)) { ?>
+	<div class="form-message error">license activation failed!</div>
+	<?php } ?>
+</div>
+<div>
+	<h1>Premium License</h1>
+	<p>If you want to access our premium features then contact our sales (trust and safety) department in order to for us to check your identity and street cred and discuss.</p>
+</div>
+<?php require '../footer.php';

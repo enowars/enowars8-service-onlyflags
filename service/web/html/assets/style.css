@@ -1,0 +1,100 @@
+*, *:before, *:after {
+	box-sizing: border-box;
+	padding: 0;
+	margin: 0;
+	font-family: Arial, sans-serif;
+
+	--color1: #151515;
+	--color2: #A91D3A;
+	--color3: #C73659;
+	--color4: #EEEEEE;
+	--color5: #202020;
+
+	--success: lightgreen;
+	--error: color-mix(in srgb, red, white);
+
+	--monospace: monospace;
+}
+
+body {
+	background-color: var(--color1);
+	color: var(--color4);
+}
+
+a {
+	color: var(--color2);
+	text-decoration: none;
+}
+a:hover {
+	color: var(--color3);
+}
+
+code {
+	font-family: var(--monospace);
+	background-color: var(--color5);
+}
+
+ul ul {
+	margin-left: 15px;
+}
+
+.wrapper {
+	max-width: 990px;
+	margin: auto;
+}
+
+.header {
+	background-color: var(--color5);
+	color: var(--color4);
+}
+.header-content {
+	display: flex;
+	justify-content: space-between;
+	padding: 5px 0;
+}
+
+.content {
+	margin-top: 25px;
+}
+
+.content .wrapper {
+	display: flex;
+}
+
+.command-box>* {
+	padding: 15px
+}
+.code {
+	font-family: var(--monospace);
+	background-color: var(--color5);
+}
+
+.form-box {
+	width: 250px;
+	order: 99;
+}
+.form-box h5 {
+	text-align: center;
+	background: linear-gradient(to bottom, var(--color3) 0%, var(--color5) 70%);
+}
+
+.form-element {
+	margin-bottom: 2px;
+}
+.form-element label {
+	font-size: small;
+}
+.form-element input {
+	width:100%;
+}
+
+.form-message {
+	padding: 2px;
+}
+.form-message.success {
+	background-color: var(--success);
+	color: var(--color1);
+}
+.form-message.error {
+	background-color: var(--error);
+}
