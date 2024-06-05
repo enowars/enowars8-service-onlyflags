@@ -11,7 +11,8 @@ services:
     cap_add:
       - CAP_NET_RAW
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   web:
     build: ./web/
@@ -21,6 +22,9 @@ services:
     networks:
       db:
         ipv4_address: 10.6.0.3
+    depends_on:
+      db:
+        condition: service_healthy
 
 
   db:
@@ -36,6 +40,11 @@ services:
         ipv4_address: 10.6.0.2
       db2:
         ipv4_address: 10.5.0.2
+    healthcheck:
+      test:  ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 10
+
 
   echo:
     build: ./echo/
@@ -51,7 +60,8 @@ services:
         ipv4_address: 10.5.0.3
       internal_net:
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 
 networks:
