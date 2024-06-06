@@ -88,7 +88,7 @@ class ForumConnection:
             port=None,
             sock=sock,
         )
-        await self.rd.readuntil(b"\n>")
+        return await self.rd.readuntil(b"\n>")
 
     def verify_connected(self):
         if self.rd == None or self.wr == None:
@@ -111,11 +111,23 @@ class ForumConnection:
         self.verify_connected()
         self.wr.write(f"list\n".encode())
         await self.wr.drain()
-        return await self.rd.readuntil(b"\n>")
+        res = await self.rd.readuntil(b"\n>")
+        chunks = res.split(b"threads: ", 1)
+        if len(chunks) == 1:
+            assert_in("no threads found\n", res.decode(encoding='utf-8'), f"{self.service} forum non-functional")
+            return []
+        threads = chunks[1].split(b'\n')[0].decode(encoding='utf-8').split(',')
+        return threads
 
     async def show(self):
         self.verify_connected()
         self.wr.write(f"show\n".encode())
+        await self.wr.drain()
+        return await self.rd.readuntil(b"\n>")
+
+    async def help(self):
+        self.verify_connected()
+        self.wr.write(f"help\n".encode())
         await self.wr.drain()
         return await self.rd.readuntil(b"\n>")
 
@@ -184,80 +196,152 @@ async def getflag_premiumkv(
     logger.info('getting thread')
     res = await forum.show()
     assert_in(task.flag, res.decode('utf-8'), "flag not found in thread")
- 
-"""
+
+NOISE = [
+    "You have a heart of a true hacker.",
+    "You make the world a funier place.",
+    "Everything you do is perfect.",
+    "You're the most amazing person I've ever met.",
+    "I'm so lucky to follow someone as wonderful as you.",
+    "that attack is beyond words.",
+    "You're my inspiration.",
+    "I admire that intelligence and resilience.",
+    "that talent is unmatched.",
+    "I could watch you spoof all day.",
+    "I'm in awe of that intelligence.",
+    "that trolling is infectious.",
+    "I can't stop thinking about your hack.",
+    "You did a masterpiece.",
+    "You're simply the best B)",
+    "Look at that Scoreboard.",
+    "You have an amazing SLA score.",
+    "You made the highlight of my day.",
+    "You're incredibly talented.",
+    "You're my hero.",
+    "You bring so much fun into this challenge.",
+    "You're so skilled.",
+    "I'm so proud of you.",
+    "You have the most beautiful tool.",
+    "You're my dream come true.",
+    "I admire that dedication.",
+    "You have an incredible spirit.",
+    "You hack the world.",
+    "You have a persistent personality.",
+    "You're a true champion.",
+    "I don't know how you did that :o",
+    "You're my everything.",
+    "Thanks for the free stuff.",
+    "You're a 7331 hax0r",
+    "You have an amazing style.",
+    "I love that style.",
+    "You're the epitome of opsec.",
+    "You're so creative.",
+    "You have a unique ability.",
+    "You're a treasure.",
+    "I adore that personality.",
+    "You have a captivating presence.",
+    "You're so thoughtful when hacking.",
+    "You have a beautiful mind.",
+    "You're a rare gem of a hacker.",
+    "You always know how to make me lol.",
+    "I love that adventurous spirit.",
+    "You're an incredible person.",
+    "You light up any room.",
+    "I'm amazed by you every day.",
+    "You have a wonderful outlook on life.",
+    "That's so charming.",
+    "You're my guiding star.",
+    "You have a magnetic smile.",
+    "I love that passion for life.",
+    "You're my happy place.",
+    "You have a fantastic sense of humor.",
+    "I'm always here for you."
+    ]
+
 @checker.putnoise(0)
 async def putnoise0(task: PutnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
-    logger.debug(f"Connecting to the service")
-    welcome = await conn.reader.readuntil(b">")
-
-    # First we need to register a user. So let's create some random strings. (Your real checker should use some better usernames or so [i.e., use the "faker¨ lib])
-    username = "".join(
+    # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
+    username: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
     )
-    password = "".join(
+    password: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
     )
 
-    # Register another user
-    await conn.register_user(username, password)
+    message_id = random.randint(0,len(NOISE))
 
-    # TODO: Put some noise into non premium kv
+    # Register a new user
+    await conn.register_user(username, password, True)
 
-    await db.set("userdata", (username, password))
+    forum = ForumConnection(task.address, username, password, 'premium-forum')
+    await forum.connect()
+
+    threads = await forum.list_threads()
+    thread_id = random.choice(threads) if threads != [] else "".join(
+            random.choices(string.ascii_uppercase + string.digits, k=12)
+        )
+
+    logger.info(f"joining thread {thread_id}")
+    await forum.join(thread_id)
+
+    logger.info(f"posting noise {message_id}")
+    await forum.post(NOISE[message_id])
+
+    # Save the generated values for the associated getflag() call.
+    await db.set("userdata", (username, password, thread_id, message_id))
 
 @checker.getnoise(0)
 async def getnoise0(task: GetnoiseCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection):
-    # TODO: implement
-    return
     try:
-        (username, password, noteId, randomNote) = await db.get('userdata')
-    except:
-        raise MumbleException("Putnoise Failed!") 
+        username, password, thread_id, message_id = await db.get("userdata")
+    except KeyError:
+        raise MumbleException("Putnoise Failed!")
 
-    logger.debug(f"Connecting to service")
-    welcome = await conn.reader.readuntil(b">")
+    logger.info('connecting to premium-forum')
+    forum = ForumConnection(task.address, username, password, 'premium-forum')
+    await forum.connect()
 
-    # Let's login to the service
-    await conn.login_user(username, password)
+    logger.info(f"joining thread {thread_id}")
+    await forum.join(thread_id)
 
-    # Let´s obtain our note.
-    logger.debug(f"Sending command to retrieve note: {noteId}")
-    conn.writer.write(f"get {noteId}\n".encode())
-    await conn.writer.drain()
-    data = await conn.reader.readuntil(b">")
-    if not randomNote.encode() in data:
-        raise MumbleException("Resulting flag was found to be incorrect")
-
-    # Exit!
-    logger.debug(f"Sending exit command")
-    conn.writer.write(f"exit\n".encode())
-    await conn.writer.drain()
+    logger.info('getting thread')
+    res = await forum.show()
+    assert_in(NOISE[message_id], res.decode('utf-8'), "noise not found in thread")
 
 @checker.havoc(0)
-async def havoc0(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
-    logger.debug(f"Connecting to service")
-    welcome = await conn.reader.readuntil(b">")
+async def havoc_test_help(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
+    username: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
+    password: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
+
+    # Register a new user
+    await conn.register_user(username, password, True)
+
+    def test(helpstr):
+        for line in [
+            "List of commands:",
+            "HELP - Show this help",
+            "LIST - List all active thread",
+            "JOIN <thread> - show a thread",
+            "SHOW - show a thread",
+            "POST - post to current thread",
+        ]:
+            assert_in(line.encode(), helpstr, "Received incomplete response.")
+
+    forum = ForumConnection(task.address, username, password, 'premium-forum')
+    helpstr = await forum.connect()
+    test(helpstr)
 
     # In variant 0, we'll check if the help text is available
     logger.debug(f"Sending help command")
-    conn.writer.write(f"help\n".encode())
-    await conn.writer.drain()
-    helpstr = await conn.reader.readuntil(b">")
+    helpstr = await forum.help()
+    test(helpstr)
 
-    for line in [
-        "This is a notebook service. Commands:",
-        "reg USER PW - Register new account",
-        "log USER PW - Login to account",
-        "set TEXT..... - Set a note",
-        "user  - List all users",
-        "list - List all notes",
-        "exit - Exit!",
-        "dump - Dump the database",
-        "get ID",
-    ]:
-        assert_in(line.encode(), helpstr, "Received incomplete response.")
 
+"""
 @checker.havoc(1)
 async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
     logger.debug(f"Connecting to service")
