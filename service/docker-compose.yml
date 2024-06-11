@@ -43,6 +43,7 @@ services:
     healthcheck:
       test:  ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
       timeout: 10s
+      interval: 5s
       retries: 10
 
 
