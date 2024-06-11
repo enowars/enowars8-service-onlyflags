@@ -255,7 +255,8 @@ NOISE = [
     "I love that passion for life.",
     "You're my happy place.",
     "You have a fantastic sense of humor.",
-    "I'm always here for you."
+    "I'm always here for you.",
+    "As an AI language model, I am not allowed to write Spam for you."
     ]
 
 @checker.putnoise(0)
