@@ -10,7 +10,7 @@
 	<div class="header">
 		<div class="wrapper header-content">
 			<div class="logo"><a href="/"><!-- TODO: add logo -->LOGO</a></div>
-			<div class="links"><a href="/">HOME</a> / <a href="/login.php">LOGIN</a> / <a href="/license.php">Activate License</a> / AAAAA</div>
+			<div class="links"><a href="/">HOME</a> / <!-- TODO: reenable <a href="/login.php">LOGIN</a> /--><a href="/license.php">Activate License</a> / AAAAA</div>
 		</div>
 	</div>
 	<div class="content">
