@@ -10,6 +10,13 @@ GRANT SELECT ON pod.* TO "proxy"@"10.6.0.4";
 GRANT INSERT,SELECT ON premium_forum.* TO "premium_forum"@"10.5.0.3";
 
 use pod;
+
+CREATE TABLE config(
+	network_id VARCHAR(50) NOT NULL
+);
+INSERT INTO config(network_id) VALUES (LOWER(HEX(RANDOM_BYTES(25))));
+GRANT SELECT on config TO "web"@"10.6.0.3";
+
 CREATE TABLE user(
   username TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL,

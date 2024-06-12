@@ -7,6 +7,7 @@ import jwt
 import httpx
 from python_socks.async_.asyncio import Proxy
 from python_socks import ProxyConnectionError
+from bs4 import BeautifulSoup
 
 from typing import Optional
 from logging import LoggerAdapter
@@ -60,13 +61,27 @@ class Connection:
             self.logger.debug(f"location fail: '{loc}' {res} {res.text}")
             raise MumbleException(message)
 
+    def _verify_200(self, res: httpx.Response, message: str = "Request failed"):
+        if res.status_code != 200:
+            self.logger.debug(f"not a 200: {res} {res.text}")
+            raise MumbleException(message)
+
     async def register_user(self, username: str, password: str, premium: bool = False):
         self.logger.debug(f"register user: {username} with password: {password}")
-        res = await self.client.post("/index.php", data={"username":username, "password": password})
+        res = await self.client.post("/", data={"username":username, "password": password})
         self._verify_302_with_redirect(res, '/?success', 'User registration failed')
         
         if premium:
-            key = jwt.encode({"sub":username}, priv_key, algorithm="RS256")
+            res = await self.client.get('/license.php')
+            self._verify_200(res)
+            soup = BeautifulSoup(res.text)
+            network_span = soup.find(id='network_id')
+            if network_span == None:
+                raise MumbleException('network_id not available')
+            network_id = network_span.contents[0]
+            if network_id == None or len(network_id) != 50:
+                raise MumbleException('network_id malformed')
+            key = jwt.encode({'sub':username,'aud':network_id}, priv_key, algorithm="RS256")
             self.logger.debug(f"send license key for user: {username} {key}")
             res = await self.client.post("/license.php", data={"key": key})
             self._verify_302_with_redirect(res, "/license.php?success", "Licensing failed")
