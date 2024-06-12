@@ -1,7 +1,27 @@
 use anyhow::Context;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use lazy_static::lazy_static;
 use sqlx::MySqlPool;
-use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
+
+lazy_static! {
+    static ref FLAG_REGEX: regex::Regex =
+        regex::Regex::new(r#"ENO(?P<data>[A-Za-y0-9+/]{48})"#).expect("compiled regex");
+}
+
+struct FlagReplacer;
+
+impl regex::Replacer for FlagReplacer {
+    fn replace_append(&mut self, caps: &regex::Captures<'_>, dst: &mut String) {
+        dst.push_str("ONE");
+        let data = &caps["data"];
+        let data = STANDARD.decode(data).unwrap();
+
+        dst.push_str(&STANDARD.encode(data));
+    }
+}
 
 async fn write_help<W: AsyncWrite + std::marker::Unpin>(mut w: W) -> anyhow::Result<()> {
     w.write_all(b"List of commands:\nHELP - Show this help\nLIST - List all active thread\nJOIN <thread> - show a thread\nSHOW - show a thread\nPOST - post to current thread\n").await?;
@@ -115,11 +135,26 @@ async fn handle_client(
                                 },
                             ) {
                                 (Some(thread), Some(username)) => {
+                                    let (content, censor): (String, Option<Vec<u8>>) =
+                                        match open_forum {
+                                            true if FLAG_REGEX.is_match(post) => {
+                                                // TODO: generate
+                                                let flag_replacer = FlagReplacer;
+                                                (
+                                                    FLAG_REGEX
+                                                        .replace_all(post, flag_replacer)
+                                                        .into_owned(),
+                                                    Some(vec![]),
+                                                )
+                                            }
+                                            _ => (post.to_owned(), None),
+                                        };
                                     sqlx::query!(
-                                        "INSERT INTO post(username, thread,content) VALUES(?,?,?)",
+                                        "INSERT INTO post(username, thread, content, censor_data) VALUES(?,?,?,?)",
                                         username,
                                         thread,
-                                        post
+                                        content,
+                                        censor
                                     )
                                     .execute(&pool)
                                     .await?;
