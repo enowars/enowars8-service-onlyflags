@@ -18,6 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
     $publicKey = file_get_contents('../jwt_pub.crt');
     try {
       $jwt = JWT::decode($_POST['key'], new Key($publicKey, 'RS256'));
+
+      if (!property_exists($jwt, 'sub') || !property_exists($jwt, 'aud') || $config['network_id'] !== $jwt->aud)
+        throw new UnexpectedValueException;
+
       $query = $con->prepare("UPDATE user SET plan = 'premium' WHERE username = ?");
       $query->bindParam(1, $jwt->sub);
       $query->execute();
