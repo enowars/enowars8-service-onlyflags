@@ -5,13 +5,19 @@ use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Firebase\JWT\SignatureInvalidException;
 
+$con = require '../db.php';
+
+$config = $con->query("SELECT * FROM config")->fetch(PDO::FETCH_ASSOC);
+if ($config == null) {
+  throw new RuntimeException("could not load config");
+}
+
 if ($_SERVER['REQUEST_METHOD'] === "POST") {
   if (array_key_exists('key', $_POST)) {
   
     $publicKey = file_get_contents('../jwt_pub.crt');
     try {
       $jwt = JWT::decode($_POST['key'], new Key($publicKey, 'RS256'));
-      $con = require '../db.php';
       $query = $con->prepare("UPDATE user SET plan = 'premium' WHERE username = ?");
       $query->bindParam(1, $jwt->sub);
       $query->execute();
@@ -47,6 +53,6 @@ require '../header.php';
 </div>
 <div>
 	<h1>Premium License</h1>
-	<p>If you want to access our premium features then contact our sales (trust and safety) department in order to for us to check your identity and street cred and discuss.</p>
+	<p>If you want to access our premium features then contact our sales (trust and safety) department in order to for us to check your identity and street cred and discuss. Also supply the folowing netword identifier: <span id="network_id"><?php echo $config['network_id']; ?></span></p>
 </div>
 <?php require '../footer.php';
