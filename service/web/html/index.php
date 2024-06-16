@@ -57,6 +57,7 @@ require '../header.php';
 			<li><var>SERVICE</var>: our services reachable in the network
 				<ul>
 					<li><var>echo</var>: test service to test the connection</li>
+					<li><var>open-forum</var>: general open forum accesible for everyone. (please note: flag sharing is not allowed)</li>
 					<li><var>premium-forum</var>: (PREMIUM) our exclusive, anonymous forum</li>
 				</ul>
 			</li>
