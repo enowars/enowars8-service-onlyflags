@@ -28,11 +28,12 @@ CREATE TABLE post(
   username VARCHAR(50) NOT NULL,
   thread TEXT NOT NULL,
   content TEXT NOT NULL,
-  censor_data TINYBLOB NOT NULL,
+  censor_data TEXT NULL,
   created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 GRANT UPDATE(plan) on user TO "web"@"10.6.0.3";
 GRANT INSERT,SELECT on post TO "open_forum";
+GRANT SELECT on user TO "open_forum";
 CREATE EVENT cleanup_user ON SCHEDULE EVERY 5 SECOND DO DELETE FROM user WHERE TIMESTAMPDIFF(SECOND, created, CURRENT_TIME) > 600;
 
 use premium_forum;
@@ -40,7 +41,7 @@ CREATE TABLE post(
   username VARCHAR(50) NOT NULL,
   thread TEXT NOT NULL,
   content TEXT NOT NULL,
-  censor_data TINYBLOB NOT NULL,
+  censor_data TEXT NULL,
   created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX post_thread_IDX ON post(thread);

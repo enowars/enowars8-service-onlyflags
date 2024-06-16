@@ -1,0 +1,36 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT username, content FROM post WHERE thread = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "username",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 200
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "content",
+        "type_info": {
+          "type": "Blob",
+          "flags": "NOT_NULL | BLOB | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 262140
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d3945549da7d2474997c78c75fb3f96da465f91fb580783f04a2945effb44f16"
+}
