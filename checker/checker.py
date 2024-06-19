@@ -70,7 +70,7 @@ class Connection:
         self.logger.debug(f"register user: {username} with password: {password}")
         res = await self.client.post("/", data={"username":username, "password": password})
         self._verify_302_with_redirect(res, '/?success', 'User registration failed')
-        
+
         if premium:
             res = await self.client.get('/license.php')
             self._verify_200(res)
@@ -87,11 +87,13 @@ class Connection:
             self._verify_302_with_redirect(res, "/license.php?success", "Licensing failed")
 
 class ForumConnection:
-    def __init__(self, host:str, username: str, password:str, service: str):
+    def __init__(self, host:str, username: str, password:str, service: str, open_forum: bool = False):
         self.proxy = Proxy.from_url(f"socks5://{username}:{password}@{host}:1080", rdns=True)
         self.service = service
         self.rd = None
         self.wr = None
+
+        self.open_forum = open_forum
 
     async def connect(self):
         try:
@@ -116,11 +118,25 @@ class ForumConnection:
         res = await self.rd.readuntil(b"\n>")
         assert_in(f"changed thread to {thread_id}", res.decode(encoding='utf-8'), f"{self.service} forum non-functional")
 
-    async def post(self, content: str):
+    async def post(self, content: str, should_tos: bool = False):
         self.verify_connected()
+        if not self.open_forum and should_tos:
+            raise Exception("not and open forum and should tos")
         self.wr.write(f"post {content}\n".encode())
         await self.wr.drain()
-        await self.rd.readuntil(b"\n>")
+        res = await self.rd.readuntil(b"\n>")
+        if self.open_forum and should_tos:
+            assert_in("TOS Violation detected:\nYou are not allowed to share flags on the open forum.", res.decode(encoding='utf-8'))
+            chunks = res.split(b"censor_data:", 1)
+            if len(chunks) == 1:
+                raise MumbleException("censor_data missing")
+            try:
+                data_chunks = [int(c) for c in chunks[1].split(b"\n")[0].decode(encoding='utf-8').split(',')]
+            except ValueError:
+                raise MumbleException("censor_data mangled")
+            # TODO: finish
+        else:
+            assert_in("Posted.\n", res.decode(encoding='utf-8'), f"posting on {self.service} failed")
 
     async def list_threads(self):
         self.verify_connected()
@@ -146,6 +162,16 @@ class ForumConnection:
         await self.wr.drain()
         return await self.rd.readuntil(b"\n>")
 
+    async def login(self, username: str, password: str):
+        self.verify_connected()
+        if not self.open_forum:
+            raise Exception("not an open forum")
+        self.wr.write(f"login {username}\n".encode())
+        await self.wr.drain()
+        await self.rd.readuntil(b"\nEnter the password: ")
+        self.wr.write(f"{password}\n".encode())
+        await self.wr.drain()
+        await self.rd.readuntil(b"\n>")
 
 
 @checker.register_dependency
@@ -162,7 +188,7 @@ async def putflag_premiumkv(
     task: PutflagCheckerTaskMessage,
     db: ChainDB,
     conn: Connection,
-    logger: LoggerAdapter,    
+    logger: LoggerAdapter,
 ) -> None:
     # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
     username: str = "".join(
@@ -203,6 +229,61 @@ async def getflag_premiumkv(
 
     logger.info('connecting to premium-forum')
     forum = ForumConnection(task.address, username, password, 'premium-forum')
+    await forum.connect()
+
+    logger.info(f"joining thread {thread_id}")
+    await forum.join(thread_id)
+
+    logger.info('getting thread')
+    res = await forum.show()
+    assert_in(task.flag, res.decode('utf-8'), "flag not found in thread")
+
+@checker.putflag(1)
+async def putflag_spambot(
+    task: PutflagCheckerTaskMessage,
+    db: ChainDB,
+    conn: Connection,
+    logger: LoggerAdapter,
+) -> None:
+    # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
+    username: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
+    password: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
+    thread_id: str = "".join(
+        random.choices(string.ascii_uppercase + string.digits, k=12)
+    )
+
+    # Register a new user
+    await conn.register_user(username, password)
+
+    forum = ForumConnection(task.address, username, password, 'open-forum', open_forum=True)
+    await forum.connect()
+
+    logger.info(f"joining thread {thread_id}")
+    await forum.join(thread_id)
+
+    logger.info("posting flag")
+    await forum.post(task.flag)
+
+    # Save the generated values for the associated getflag() call.
+    await db.set("userdata", (username, password, thread_id))
+
+    return thread_id #{"username": username, "thread_id": thread_id}
+
+@checker.getflag(1)
+async def getflag_spambot(
+    task: GetflagCheckerTaskMessage, db: ChainDB, logger: LoggerAdapter, conn: Connection
+) -> None:
+    try:
+        username, password, thread_id = await db.get("userdata")
+    except KeyError:
+        raise MumbleException("Missing database entry from putflag")
+
+    logger.info('connecting to premium-forum')
+    forum = ForumConnection(task.address, username, password, 'open_forum', open_forum=True)
     await forum.connect()
 
     logger.info(f"joining thread {thread_id}")
@@ -444,7 +525,7 @@ async def exploit0(task: ExploitCheckerTaskMessage, searcher: FlagSearcher, conn
     await conn.register_user(username, password)
 
     forum = ForumConnection(task.address, username, password, 'premium-forum')
-    
+
     await forum.connect()
 
     await forum.join(task.attack_info)
