@@ -128,7 +128,7 @@ async fn handle_client(
                     if login.is_empty() {
                         wr.write_all(b"please specify a username.\n").await?;
                     } else {
-                        wr.write_all(b"Enter the password: ").await?;
+                        wr.write_all(b"\nEnter the password: ").await?;
                         wr.flush().await?;
                         loggin_in = Some(login.to_string());
                         continue 'loopa;
