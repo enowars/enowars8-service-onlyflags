@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "UPDATE post SET username = ?, thread = ?, content = ?, censor_data = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "928e16662097619b0a5bc9934bc80861125f345476b361e827d61d1f9c0491e1"
+}

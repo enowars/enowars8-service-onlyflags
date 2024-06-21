@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO post(username, thread, content) VALUES ('','','')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "883f3a15a218630d90de18ee7e726d6c3d22b315756cb29ada21009863907acb"
+}
