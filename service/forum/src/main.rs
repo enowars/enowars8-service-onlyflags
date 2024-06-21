@@ -12,7 +12,10 @@ mod replacer {
     use num_bigint::{BigUint, RandBigInt};
     use std::sync::OnceLock;
     pub struct FlagReplacer {
-        args: [BigUint; 3],
+        id: u32,
+
+        a: BigUint,
+        b: BigUint,
     }
 
     impl FlagReplacer {
@@ -34,14 +37,13 @@ mod replacer {
             })
         }
 
-        pub fn new() -> Self {
+        pub fn new(id: u32) -> Self {
             let mut rng = rand::thread_rng();
             Self {
-                args: [
-                    rng.gen_biguint(288),
-                    rng.gen_biguint(288),
-                    rng.gen_biguint(288),
-                ],
+                id,
+
+                a: rng.gen_biguint(288),
+                b: rng.gen_biguint(288),
             }
         }
 
@@ -53,8 +55,10 @@ mod replacer {
             Self::get_regex().replace_all(haystack, self).into_owned()
         }
 
+        /// get the censor parameters
+        /// NOTE: Client must expect more than 2 parameters
         pub fn get_data(&self) -> String {
-            self.args.iter().join(",")
+            [&self.a, &self.b].iter().join(",")
         }
     }
     impl regex::Replacer for FlagReplacer {
@@ -63,14 +67,15 @@ mod replacer {
             let data = STANDARD.decode(data).expect("data is base64 string");
             let n = BigUint::from_bytes_be(&data);
 
-            let mut r = BigUint::new(vec![]);
-            for (i, c) in self.args.iter().enumerate() {
-                r += c * (n.pow(i.try_into().expect("i convertable to i32")));
+            let mut r = n.clone();
+            for (i, c) in [&self.a, &self.b].iter().enumerate() {
+                r += *c * (self.id.pow(i as u32 + 1));
             }
             r %= Self::get_p();
 
-            dst.push_str("ONE");
+            dst.push_str("ONE{");
             dst.push_str(&STANDARD.encode(r.to_bytes_be()));
+            dst.push_str("}")
         }
     }
 }
@@ -86,6 +91,35 @@ async fn write_help<W: AsyncWrite + std::marker::Unpin>(
             .await?;
     }
     w.write_all(b"\nLIST - List all active thread\nJOIN <thread> - show a thread\nSHOW - show a thread\nPOST - post to current thread\n").await?;
+    if open_forum {
+        w.write_all(b"STALK <username> - see what a specific user has posted\n")
+            .await?;
+    }
+    Ok(())
+}
+
+struct Post {
+    id: i32,
+    username: String,
+    content: String,
+}
+
+async fn dump_posts<W: AsyncWrite + std::marker::Unpin>(
+    mut wr: W,
+    posts: Vec<Post>,
+) -> anyhow::Result<()> {
+    if posts.len() > 0 {
+        for i in posts {
+            wr.write_all(format!("{}", i.id).as_bytes()).await?;
+            wr.write_all(b"(").await?;
+            wr.write_all(i.username.as_bytes()).await?;
+            wr.write_all(b"):").await?;
+            wr.write_all(i.content.as_bytes()).await?;
+            wr.write_all(b"\n").await?;
+        }
+    } else {
+        wr.write_all(b"No posts were found.\n").await?;
+    }
     Ok(())
 }
 
@@ -165,27 +199,37 @@ async fn handle_client(
                 }
                 show if show.trim().to_lowercase() == "show" => match &thread {
                     Some(thread) => {
-                        let res = sqlx::query!(
-                            "SELECT username, content FROM post WHERE thread = ?",
+                        let res = sqlx::query_as!(
+                            Post,
+                            "SELECT id, username, content FROM post WHERE thread = ?",
                             thread
                         )
                         .fetch_all(&pool)
                         .await?;
-                        if res.len() > 0 {
-                            for i in res {
-                                wr.write_all(i.username.as_bytes()).await?;
-                                wr.write_all(b":").await?;
-                                wr.write_all(i.content.as_bytes()).await?;
-                                wr.write_all(b"\n").await?;
-                            }
-                        } else {
-                            wr.write_all(b"No posts were found.\n").await?;
-                        }
+                        dump_posts(&mut wr, res).await?;
                     }
                     None => {
                         wr.write_all(b"No thread selected.\n").await?;
                     }
                 },
+                stalk if stalk.trim().to_lowercase().starts_with("stalk") => {
+                    let stalk = stalk["stalk".len()..].trim();
+                    if stalk.is_empty() {
+                        wr.write_all(b"Please specify a thread.\n").await?;
+                    } else {
+                        let username = Some(stalk.to_owned());
+
+                        let res = sqlx::query_as!(
+                            Post,
+                            "SELECT id, username, content FROM post WHERE username = ?",
+                            username
+                        )
+                        .fetch_all(&pool)
+                        .await?;
+
+                        dump_posts(&mut wr, res).await?;
+                    }
+                }
                 post if post.to_lowercase().starts_with("post") => {
                     let post = post["post".len()..].trim();
                     if post.is_empty() {
@@ -200,29 +244,64 @@ async fn handle_client(
                             },
                         ) {
                             (Some(thread), Some(username)) => {
-                                let (content, censor_data): (String, Option<String>) =
+                                let (content, censor_data): (String, Option<(u32, String, _)>) =
                                     match open_forum {
                                         true if FlagReplacer::is_match(post) => {
-                                            let flag_replacer = FlagReplacer::new();
+                                            let mut transaction = pool.begin().await?;
+                                            sqlx::query!(r"INSERT INTO post(username, thread, content) VALUES ('','','')")
+                                                .execute(&mut *transaction).await?;
+                                            let id = match sqlx::query!(
+                                                r#"SELECT LAST_INSERT_ID() as "id!: u32""#
+                                            )
+                                            .fetch_one(&mut *transaction)
+                                            .await
+                                            {
+                                                Ok(r) => r.id,
+                                                Err(e) => {
+                                                    transaction
+                                                        .rollback()
+                                                        .await
+                                                        .context("Failed to roll back")?;
+                                                    return Err(e.into());
+                                                }
+                                            };
+                                            let flag_replacer = FlagReplacer::new(id);
                                             let data = flag_replacer.get_data();
-                                            (flag_replacer.replace_all(post), Some(data))
+                                            (
+                                                flag_replacer.replace_all(post),
+                                                Some((id, data, transaction)),
+                                            )
                                         }
                                         _ => (post.to_owned(), None),
                                     };
-                                sqlx::query!(
-                                        "INSERT INTO post(username, thread, content, censor_data) VALUES(?,?,?,?)",
+                                if let Some(data) = censor_data {
+                                    let (id, censor_data, mut transaction) = data;
+                                    sqlx::query!(
+                                        "UPDATE post SET username = ?, thread = ?, content = ?, censor_data = ? WHERE id = ?",
                                         username,
                                         thread,
                                         content,
-                                        censor_data
+                                        censor_data,
+                                        id
+                                    )
+                                    .execute(&mut *transaction)
+                                    .await?;
+                                    transaction
+                                        .commit()
+                                        .await
+                                        .context("Failed to commit tos violation")?;
+                                    wr.write_all(b"TOS Violation detected:\nYou are not allowed to share flags on the open forum.\n\ncensor_data:").await?;
+                                    wr.write_all(&censor_data.into_bytes()).await?;
+                                    wr.write_all(b"\n").await?;
+                                } else {
+                                    sqlx::query!(
+                                        "INSERT INTO post(username, thread, content, censor_data) VALUES(?,?,?,NULL)",
+                                        username,
+                                        thread,
+                                        content,
                                     )
                                     .execute(&pool)
                                     .await?;
-                                if let Some(data) = censor_data {
-                                    wr.write_all(b"TOS Violation detected:\nYou are not allowed to share flags on the open forum.\n\ncensor_data:").await?;
-                                    wr.write_all(&data.into_bytes()).await?;
-                                    wr.write_all(b"\n").await?;
-                                } else {
                                     wr.write_all(b"Posted.\n").await?;
                                 }
                             }

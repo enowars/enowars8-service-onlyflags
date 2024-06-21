@@ -1,0 +1,25 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT LAST_INSERT_ID() as \"id!: u32\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: u32",
+        "type_info": {
+          "type": "LongLong",
+          "flags": "NOT_NULL | UNSIGNED | BINARY",
+          "char_set": 63,
+          "max_size": 21
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1a984e333edc60679f40ec85dd6614eb1d5b0285766e00e354e40805735274f5"
+}

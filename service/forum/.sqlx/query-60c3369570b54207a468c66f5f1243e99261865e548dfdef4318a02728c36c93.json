@@ -1,10 +1,20 @@
 {
   "db_name": "MySQL",
-  "query": "SELECT username, content FROM post WHERE thread = ?",
+  "query": "SELECT id, username, content FROM post WHERE username = ?",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": {
+          "type": "Long",
+          "flags": "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT",
+          "char_set": 63,
+          "max_size": 11
+        }
+      },
+      {
+        "ordinal": 1,
         "name": "username",
         "type_info": {
           "type": "VarString",
@@ -14,7 +24,7 @@
         }
       },
       {
-        "ordinal": 1,
+        "ordinal": 2,
         "name": "content",
         "type_info": {
           "type": "Blob",
@@ -29,8 +39,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "d3945549da7d2474997c78c75fb3f96da465f91fb580783f04a2945effb44f16"
+  "hash": "60c3369570b54207a468c66f5f1243e99261865e548dfdef4318a02728c36c93"
 }
