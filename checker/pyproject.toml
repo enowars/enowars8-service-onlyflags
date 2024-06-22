@@ -11,10 +11,17 @@ enochecker3 = "^0.8.1"
 pyjwt = {extras = ["crypto"], version = "^2.8.0"}
 python-socks = {extras = ["asyncio"], version = "^2.4.4"}
 beautifulsoup4 = "^4.12.3"
+numpy = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 enochecker-cli = "^0.7.0"
 enochecker-test = "^0.9.0"
+black = "^24.4.2"
+flake8 = "^7.0.0"
+isort = "^5.13.2"
+mypy = "^1.10.0"
+
+types-beautifulsoup4 = "^4.12.0"
 
 [build-system]
 requires = ["poetry-core"]
