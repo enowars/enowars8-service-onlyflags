@@ -22,7 +22,7 @@ mod replacer {
         fn get_regex() -> &'static regex::Regex {
             static FLAG_REGEX: OnceLock<regex::Regex> = OnceLock::new();
             FLAG_REGEX.get_or_init(|| {
-                regex::Regex::new(r#"ENO(?P<data>[A-Za-y0-9+/]{48})"#).expect("compiled regex")
+                regex::Regex::new(r#"ENO(?P<data>[A-Za-z0-9+/]{48})"#).expect("compiled regex")
             })
         }
 
