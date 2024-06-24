@@ -10,9 +10,8 @@ import httpx
 from python_socks.async_.asyncio import Proxy
 from python_socks import ProxyConnectionError
 from bs4 import BeautifulSoup
-import numpy as np
 
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union, List, Tuple, Dict
 from logging import LoggerAdapter
 
 from enochecker3 import (
@@ -33,6 +32,8 @@ from enochecker3 import (
 )
 from enochecker3.utils import assert_equals, assert_in
 
+import sharing
+
 """
 Checker config
 """
@@ -44,11 +45,21 @@ app = lambda: checker.app
 with open("jwt_priv.pem", "r") as file:
     priv_key = file.read()
 
+ENO_FLAG_REGEX = re.compile(r"ENO([A-Za-z0-9+/]{48})")
 ONE_FLAG_REGEX = re.compile(r"ONE\{([-A-Za-z0-9+/=]*)\}")
+MSG_REGEX = re.compile(r"^(\d*)\(([a-zA-Z0-9-+=\/]*)\):(.*)$")
+P = 0x100000000000000000000000000000000000000000000000000000000000000000000007F
 
 """
 Utility functions
 """
+
+
+def decode_or_mumble(byt: bytes, message: str = "not a utf-8 string") -> str:
+    try:
+        return byt.decode(encoding="utf-8")
+    except ValueError:
+        raise MumbleException(message)
 
 
 class Connection:
@@ -82,7 +93,7 @@ class Connection:
         if premium:
             res = await self.client.get("/license.php")
             self._verify_200(res)
-            soup = BeautifulSoup(res.text)
+            soup = BeautifulSoup(res.text, "html.parser")
             network_span = soup.find(id="network_id")
             if network_span is None:
                 raise MumbleException("network_id not available")
@@ -129,6 +140,11 @@ class ForumConnection:
         )
         return await self.rd.readuntil(b"\n>")
 
+    async def close(self):
+        self.verify_connected()
+        if self.wr is not None:
+            self.wr.close()
+
     def verify_connected(self):
         if self.rd is None or self.wr is None:
             raise Exception("not connected")
@@ -144,7 +160,7 @@ class ForumConnection:
         res = await self.rd.readuntil(b"\n>")
         assert_in(
             f"changed thread to {thread_id}",
-            res.decode(encoding="utf-8"),
+            decode_or_mumble(res),
             f"{self.service} forum non-functional",
         )
 
@@ -156,9 +172,11 @@ class ForumConnection:
         await self.wr.drain()
         res = await self.rd.readuntil(b"\n>")
         if self.open_forum and should_tos:
+            msg = decode_or_mumble(res, "forum response mangled")
             assert_in(
                 "TOS Violation detected:\nYou are not allowed to share flags on the open forum.",
-                res.decode(encoding="utf-8"),
+                msg,
+                f"not a TOS violation: '{msg}'",
             )
             try:
                 chunks = res.split(b"censor_data:", 1)
@@ -166,17 +184,14 @@ class ForumConnection:
                     raise MumbleException("censor_data missing")
                 return [
                     int(c)
-                    for c in chunks[1]
-                    .split(b"\n")[0]
-                    .decode(encoding="utf-8")
-                    .split(",")
+                    for c in decode_or_mumble(chunks[1].split(b"\n")[0]).split(",")
                 ]
             except ValueError:
                 raise MumbleException("censor_data mangled")
         else:
             assert_in(
                 "Posted.\n",
-                res.decode(encoding="utf-8"),
+                decode_or_mumble(res),
                 f"posting on {self.service} failed",
             )
 
@@ -189,11 +204,11 @@ class ForumConnection:
         if len(chunks) == 1:
             assert_in(
                 "no threads found\n",
-                res.decode(encoding="utf-8"),
+                decode_or_mumble(res),
                 f"{self.service} forum non-functional",
             )
             return []
-        threads = chunks[1].split(b"\n")[0].decode(encoding="utf-8").split(",")
+        threads = decode_or_mumble(chunks[1].split(b"\n")[0]).split(",")
         return threads
 
     async def show(self):
@@ -225,6 +240,13 @@ class ForumConnection:
         await self.wr.drain()
         await self.rd.readuntil(b"\n>")
 
+    async def __aenter__(self):
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
 
 def gen_account() -> Tuple[str, str]:
     return (
@@ -233,12 +255,24 @@ def gen_account() -> Tuple[str, str]:
     )
 
 
-def grep(needle: str, haystack: str) -> List[str]:
+def grep(needle: Union[re.Pattern, str], haystack: List[str]) -> List[str]:
     res = []
-    for line in haystack.splitlines():
+    for line in haystack:
         if re.search(needle, line):
             res.append(line)
     return res
+
+
+def decomp_msg(msg: str) -> Tuple[int, str, str]:
+    match = re.fullmatch(MSG_REGEX, msg)
+    if match is None:
+        raise MumbleException("message syntax broken")
+    id, username, content = match.groups()  # type: ignore
+    try:
+        id = int(id)
+    except ValueError:
+        raise MumbleException("message id is NaN")
+    return id, username, content
 
 
 @checker.register_dependency
@@ -257,7 +291,7 @@ async def putflag_premiumkv(
     db: ChainDB,
     conn: Connection,
     logger: LoggerAdapter,
-) -> None:
+) -> str:
     username, password = gen_account()
     thread_id: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=15)
@@ -266,19 +300,19 @@ async def putflag_premiumkv(
     # Register a new user
     await conn.register_user(username, password, True)
 
-    forum = ForumConnection(task.address, username, password, "premium-forum")
-    await forum.connect()
+    async with ForumConnection(
+        task.address, username, password, "premium-forum"
+    ) as forum:
+        logger.info(f"joining thread {thread_id}")
+        await forum.join(thread_id)
 
-    logger.info(f"joining thread {thread_id}")
-    await forum.join(thread_id)
-
-    logger.info("posting flag")
-    await forum.post(task.flag)
+        logger.info("posting flag")
+        await forum.post(task.flag)
 
     # Save the generated values for the associated getflag() call.
     await db.set("userdata", (username, password, thread_id))
 
-    return thread_id  # {"username": username, "thread_id": thread_id}
+    return thread_id
 
 
 @checker.getflag(0)
@@ -297,15 +331,19 @@ async def getflag_premiumkv(
     await conn.register_user(username, password)
 
     logger.info("connecting to premium-forum")
-    forum = ForumConnection(task.address, username, password, "premium-forum")
-    await forum.connect()
+    async with ForumConnection(
+        task.address, username, password, "premium-forum"
+    ) as forum:
+        logger.info(f"joining thread {thread_id}")
+        await forum.join(thread_id)
 
-    logger.info(f"joining thread {thread_id}")
-    await forum.join(thread_id)
-
-    logger.info("getting thread")
-    res = await forum.show()
-    assert_in(task.flag, res.decode("utf-8"), "flag not found in thread")
+        logger.info("getting thread")
+        res = await forum.show()
+        assert_in(
+            task.flag,
+            decode_or_mumble(res, "response is not utf-8"),
+            "flag not found in thread",
+        )
 
 
 @checker.putflag(1)
@@ -314,30 +352,38 @@ async def putflag_spambot(
     db: ChainDB,
     conn: Connection,
     logger: LoggerAdapter,
-) -> None:
+) -> str:
     username, password = gen_account()
     await conn.register_user(username, password)
 
-    thread_ids: str = [
+    thread_ids: List[str] = [
         "".join(random.choices(string.ascii_uppercase + string.digits, k=15))
         for i in range(3)
     ]
 
-    forum = ForumConnection(
+    async with ForumConnection(
         task.address, username, password, "open-forum", open_forum=True
-    )
-    await forum.connect()
+    ) as forum:
+        data_chunks: Dict[str, List[str]] = {}
+        await forum.login(username, password)
+        for thread_id in thread_ids:
+            logger.info(f"joining thread {thread_id}")
+            await forum.join(thread_id)
 
-    data_chunks = {}
-    for thread_id in thread_ids:
-        logger.info(f"joining thread {thread_id}")
-        await forum.join(thread_id)
-
-        logger.info("posting flag")
-        data_chunks[thread_id] = await forum.post(task.flag, should_tos=True)
+            logger.info("posting flag")
+            data_chunks = await forum.post(task.flag, should_tos=True)
+        logger.debug(f"data_chunks: {data_chunks}")
 
     # Save the generated values for the associated getflag() call.
-    await db.set("userdata", (username, password, thread_ids, data_chunks))
+    await db.set(
+        "userdata",
+        (
+            username,
+            password,
+            thread_ids,
+            list(map(lambda x: str(x), data_chunks)),
+        ),
+    )
 
     return username
 
@@ -354,34 +400,51 @@ async def getflag_spambot(
     except KeyError:
         raise MumbleException("Missing database entry from putflag")
 
+    try:
+        data_chunks = list(map(lambda x: int(x), data_chunks))
+
+    except ValueError:
+        raise Exception(f"false data in chain db: {data_chunks}")
+
     username, password = gen_account()
 
     # Register a new user
     await conn.register_user(username, password)
 
     logger.info("connecting to open-forum")
-    forum = ForumConnection(
+    async with ForumConnection(
         task.address, username, password, "open-forum", open_forum=True
-    )
-    await forum.connect()
+    ) as forum:
+        for thread_id in thread_ids:
+            logger.info(f"joining thread {thread_id}")
+            await forum.join(thread_id)
 
-    for thread_id in thread_ids:
-        logger.info(f"joining thread {thread_id}")
-        await forum.join(thread_id)
+            logger.info("getting thread")
+            res = await forum.show()
+            res = decode_or_mumble(res).splitlines()
+            try:
+                flag = int.from_bytes(
+                    base64.b64decode(task.flag[3:]), "big"
+                )  # strip ENO and decode
+            except ValueError:
+                raise MumbleException("flag broken")
 
-        x = base64.b64decode(task.flag[3:])  # strip ENO and decode
-        flag = 0
-        for dc, i in enumerate(data_chunks[thread_id]):
-            flag += dc * pow()
+            res = grep(target_username, res)
 
-        logger.info("getting thread")
-        res = await forum.show()
-        flag = str(flag)
-        assert_in(
-            f"ONE{{{base64.b64encode(flag)}}}",
-            res.decode(encoding="utf-8"),
-            "flag not found in thread",
-        )
+            if len(res) == 0:
+                raise MumbleException("Flag not found")
+
+            logger.info("testing flags")
+            for r in res:
+                id, user, content = decomp_msg(r)
+                f = re.search(ONE_FLAG_REGEX, content)
+                if f is None:
+                    raise MumbleException("flag not found")
+                n = int.from_bytes(base64.b64decode(f.group(1)), "big")
+                y = sharing.eval_poly(data_chunks + [flag], id, P)
+                if y != n:
+                    raise MumbleException(f"Flag not correct: {n}, {y}")
+                logger.debug(f"nums: {flag} {y}")
 
 
 NOISE = [
@@ -470,24 +533,24 @@ async def putnoise0(
     # Register a new user
     await conn.register_user(username, password, True)
 
-    forum = ForumConnection(task.address, username, password, "premium-forum")
-    await forum.connect()
+    async with ForumConnection(
+        task.address, username, password, "premium-forum"
+    ) as forum:
+        threads = await forum.list_threads()
+        thread_id = (
+            random.choice(threads)
+            if threads != []
+            else "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
+        )
 
-    threads = await forum.list_threads()
-    thread_id = (
-        random.choice(threads)
-        if threads != []
-        else "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
-    )
+        logger.info(f"joining thread {thread_id}")
+        await forum.join(thread_id)
 
-    logger.info(f"joining thread {thread_id}")
-    await forum.join(thread_id)
+        logger.info(f"posting noise {message_id}")
+        await forum.post(NOISE[message_id])
 
-    logger.info(f"posting noise {message_id}")
-    await forum.post(NOISE[message_id])
-
-    # Save the generated values for the associated getflag() call.
-    await db.set("userdata", (username, password, thread_id, message_id))
+        # Save the generated values for the associated getflag() call.
+        await db.set("userdata", (username, password, thread_id, message_id))
 
 
 @checker.getnoise(0)
@@ -503,15 +566,15 @@ async def getnoise0(
         raise MumbleException("Putnoise Failed!")
 
     logger.info("connecting to premium-forum")
-    forum = ForumConnection(task.address, username, password, "premium-forum")
-    await forum.connect()
+    async with ForumConnection(
+        task.address, username, password, "premium-forum"
+    ) as forum:
+        logger.info(f"joining thread {thread_id}")
+        await forum.join(thread_id)
 
-    logger.info(f"joining thread {thread_id}")
-    await forum.join(thread_id)
-
-    logger.info("getting thread")
-    res = await forum.show()
-    assert_in(NOISE[message_id], res.decode("utf-8"), "noise not found in thread")
+        logger.info("getting thread")
+        res = await forum.show()
+        assert_in(NOISE[message_id], decode_or_mumble(res), "noise not found in thread")
 
 
 @checker.havoc(0)
@@ -548,81 +611,7 @@ async def havoc_test_help(
     helpstr = await forum.help()
     test(helpstr)
 
-
-"""
-@checker.havoc(1)
-async def havoc1(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
-    logger.debug(f"Connecting to service")
-    welcome = await conn.reader.readuntil(b">")
-
-    # In variant 1, we'll check if the `user` command still works.
-    username = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
-    password = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
-
-    # Register and login a dummy user
-    await conn.register_user(username, password)
-    await conn.login_user(username, password)
-
-    logger.debug(f"Sending user command")
-    conn.writer.write(f"user\n".encode())
-    await conn.writer.drain()
-    ret = await conn.reader.readuntil(b">")
-    if not b"User 0: " in ret:
-        raise MumbleException("User command does not return any users")
-
-    if username:
-        assert_in(username.encode(), ret, "Flag username not in user output")
-
-    # conn.writer.close()
-    # await conn.writer.wait_closed()
-
-@checker.havoc(2)
-async def havoc2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection):
-    logger.debug(f"Connecting to service")
-    welcome = await conn.reader.readuntil(b">")
-
-    # In variant 2, we'll check if the `list` command still works.
-    username = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
-    password = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
-    randomNote = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=36)
-    )
-
-    # Register and login a dummy user
-    await conn.register_user(username, password)
-    await conn.login_user(username, password)
-
-    logger.debug(f"Sending command to save a note")
-    conn.writer.write(f"set {randomNote}\n".encode())
-    await conn.writer.drain()
-    await conn.reader.readuntil(b"Note saved! ID is ")
-
-    try:
-        noteId = (await conn.reader.readuntil(b"!\n>")).rstrip(b"!\n>").decode()
-    except Exception as ex:
-        logger.debug(f"Failed to retrieve note: {ex}")
-        raise MumbleException("Could not retrieve NoteId")
-
-    assert_equals(len(noteId) > 0, True, message="Empty noteId received")
-
-    logger.debug(f"{noteId}")
-
-    logger.debug(f"Sending list command")
-    conn.writer.write(f"list\n".encode())
-    await conn.writer.drain()
-
-    data = await conn.reader.readuntil(b">")
-    if not noteId.encode() in data:
-        raise MumbleException("List command does not work as intended")
-"""
+    await forum.close()
 
 
 @checker.exploit(0)
@@ -636,16 +625,15 @@ async def exploit0(
     username, password = gen_account()
     await conn.register_user(username, password)
 
-    forum = ForumConnection(task.address, username, password, "premium-forum")
+    async with ForumConnection(
+        task.address, username, password, "premium-forum"
+    ) as forum:
+        await forum.join(str(task.attack_info))
 
-    await forum.connect()
-
-    await forum.join(task.attack_info)
-
-    data = await forum.show()
-    if flag := searcher.search_flag(data):
-        return flag
-    raise MumbleException("flag not found")
+        data = await forum.show()
+        if flag := searcher.search_flag(data):
+            return decode_or_mumble(flag)
+        raise MumbleException("flag not found")
 
 
 @checker.exploit(1)
@@ -659,18 +647,41 @@ async def exploit1(
     username, password = gen_account()
     await conn.register_user(username, password)
 
-    forum = ForumConnection(task.address, username, password, "premium-forum")
+    async with ForumConnection(
+        task.address, username, password, "open-forum", open_forum=True
+    ) as forum:
+        username = str(task.attack_info)
+        res = await forum.stalk(username)
 
-    await forum.connect()
+        res = decode_or_mumble(res).splitlines()
+        logger.debug(f"res {res}")
 
-    res = await forum.stalk(task.attack_info)
+        res = [decomp_msg(msg) for msg in grep(username, res)]
+        logger.debug(f"{res}")
+        if len(res) == 0:
+            raise MumbleException("no msg found")
 
-    np.polyfit(np.array([]), np.array([]), 3)
+        xs = list(
+            map(
+                lambda x: (
+                    x[0],
+                    int.from_bytes(
+                        base64.b64decode(re.search(ONE_FLAG_REGEX, x[2]).group(1)),
+                        "big",
+                    ),
+                ),
+                res,
+            )
+        )
+        logger.debug(f"xs {xs}")
+        test = sharing.lagrange2(xs, P)
+        logger.info(f"coeff: {test}")
 
-    data = await forum.show()
-    if flag := searcher.search_flag(data):
+        flag = "ENO" + base64.b64encode(test.to_bytes(36, "big")).decode(
+            encoding="utf-8"
+        )
+        logger.debug(f"got flag {flag}")
         return flag
-    raise MumbleException("flag not found")
 
 
 if __name__ == "__main__":
