@@ -1,0 +1,25 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT censor_data from user WHERE username = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "censor_data",
+        "type_info": {
+          "type": "Blob",
+          "flags": "BLOB",
+          "char_set": 224,
+          "max_size": 262140
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "890b488f1650991e395f932217e05142abad7f489facd4ebf293aeb126719a21"
+}
