@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "UPDATE user SET censor_data = ? WHERE username = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "d99c410e3f7f64a3efcf7a96de59d941ad7dfaf0b31db414a104bfe8475ebbdc"
+}

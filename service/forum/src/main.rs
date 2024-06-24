@@ -14,8 +14,7 @@ mod replacer {
     pub struct FlagReplacer {
         id: u32,
 
-        a: BigUint,
-        b: BigUint,
+        a: Vec<BigUint>,
     }
 
     impl FlagReplacer {
@@ -42,9 +41,15 @@ mod replacer {
             Self {
                 id,
 
-                a: rng.gen_biguint(288),
-                b: rng.gen_biguint(288),
+                a: vec![rng.gen_biguint(288), rng.gen_biguint(288)],
             }
+        }
+
+        pub fn from_data(id: u32, data: String) -> Option<Self> {
+            data.split(",")
+                .map(|s| BigUint::parse_bytes(s.as_bytes(), 10))
+                .collect::<Option<Vec<_>>>()
+                .map(|a| Self { id, a })
         }
 
         pub fn is_match(haystack: &str) -> bool {
@@ -56,9 +61,9 @@ mod replacer {
         }
 
         /// get the censor parameters
-        /// NOTE: Client must expect more than 2 parameters
+        /// NOTE: Client should expect more than 2 parameters
         pub fn get_data(&self) -> String {
-            [&self.a, &self.b].iter().join(",")
+            self.a.iter().join(",")
         }
     }
     impl regex::Replacer for FlagReplacer {
@@ -67,11 +72,12 @@ mod replacer {
             let data = STANDARD.decode(data).expect("data is base64 string");
             let n = BigUint::from_bytes_be(&data);
 
-            let mut r = n.clone();
-            for (i, c) in [&self.a, &self.b].iter().enumerate() {
-                r += *c * (self.id.pow(i as u32 + 1));
+            let p = Self::get_p();
+            let mut r = BigUint::ZERO;
+            for c in self.a.iter().chain([&n]) {
+                r = (c + r * self.id) % p;
             }
-            r %= Self::get_p();
+            r %= p;
 
             dst.push_str("ONE{");
             dst.push_str(&STANDARD.encode(r.to_bytes_be()));
@@ -157,7 +163,7 @@ async fn handle_client(
                 help if help.trim().to_lowercase() == "help" => {
                     write_help(&mut wr, open_forum).await?;
                 }
-                login if login.trim().to_lowercase().starts_with("login") => {
+                login if login.trim().to_lowercase().starts_with("login") && open_forum => {
                     let login = login["login".len()..].trim();
                     if login.is_empty() {
                         wr.write_all(b"please specify a username.\n").await?;
@@ -212,7 +218,7 @@ async fn handle_client(
                         wr.write_all(b"No thread selected.\n").await?;
                     }
                 },
-                stalk if stalk.trim().to_lowercase().starts_with("stalk") => {
+                stalk if stalk.trim().to_lowercase().starts_with("stalk") && open_forum => {
                     let stalk = stalk["stalk".len()..].trim();
                     if stalk.is_empty() {
                         wr.write_all(b"Please specify a thread.\n").await?;
@@ -265,8 +271,41 @@ async fn handle_client(
                                                     return Err(e.into());
                                                 }
                                             };
-                                            let flag_replacer = FlagReplacer::new(id);
-                                            let data = flag_replacer.get_data();
+                                            let res = match sqlx::query!(
+                                                r#"SELECT censor_data from user WHERE username = ?"#,
+                                                username
+                                            ).fetch_one(&mut * transaction).await {
+                                                Ok(r) => r.censor_data,
+                                                Err(e) => {
+                                                    transaction
+                                                        .rollback()
+                                                        .await
+                                                        .context("Failed to roll back")?;
+                                                    return Err(e.into());
+                                                }
+                                            };
+                                            let flag_replacer = res
+                                                .map(|censor_data| {
+                                                    FlagReplacer::from_data(id, censor_data)
+                                                })
+                                                .flatten();
+                                            let (flag_replacer, data) = if let Some(fr) =
+                                                flag_replacer
+                                            {
+                                                let data = fr.get_data();
+                                                (fr, data)
+                                            } else {
+                                                let fr = FlagReplacer::new(id);
+                                                let data = fr.get_data();
+                                                match sqlx::query!("UPDATE user SET censor_data = ? WHERE username = ?", data, username).execute(&mut *transaction).await {
+                                                    Ok(_) => {},
+                                                    Err(e) => {
+                                                        transaction.rollback().await?;
+                                                        return Err(e.into());
+                                                    }
+                                                }
+                                                (fr, data)
+                                            };
                                             (
                                                 flag_replacer.replace_all(post),
                                                 Some((id, data, transaction)),
@@ -277,11 +316,10 @@ async fn handle_client(
                                 if let Some(data) = censor_data {
                                     let (id, censor_data, mut transaction) = data;
                                     sqlx::query!(
-                                        "UPDATE post SET username = ?, thread = ?, content = ?, censor_data = ? WHERE id = ?",
+                                        "UPDATE post SET username = ?, thread = ?, content = ? WHERE id = ?",
                                         username,
                                         thread,
                                         content,
-                                        censor_data,
                                         id
                                     )
                                     .execute(&mut *transaction)
@@ -295,7 +333,7 @@ async fn handle_client(
                                     wr.write_all(b"\n").await?;
                                 } else {
                                     sqlx::query!(
-                                        "INSERT INTO post(username, thread, content, censor_data) VALUES(?,?,?,NULL)",
+                                        "INSERT INTO post(username, thread, content) VALUES(?,?,?)",
                                         username,
                                         thread,
                                         content,

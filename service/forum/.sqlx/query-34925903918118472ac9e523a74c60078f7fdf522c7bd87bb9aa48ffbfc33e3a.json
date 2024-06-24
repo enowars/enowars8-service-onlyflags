@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "UPDATE post SET username = ?, thread = ?, content = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "34925903918118472ac9e523a74c60078f7fdf522c7bd87bb9aa48ffbfc33e3a"
+}
