@@ -1,5 +1,4 @@
 /data/
-!/data/.gitkeep
 /echo/target
 /forum/target
 /web/vendor
