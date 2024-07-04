@@ -540,7 +540,7 @@ async def putnoise0(
         logger.info(f"joining thread {thread_id}")
         await forum.join(thread_id)
 
-        logger.info(f"posting noise {message_id}")
+        logger.info(f"posting noise {message_id}: '{NOISE[message_id]}'")
         await forum.post(NOISE[message_id])
 
         # Save the generated values for the associated getflag() call.
@@ -568,6 +568,8 @@ async def getnoise0(
 
         logger.info("getting thread")
         res = await forum.show()
+
+        logger.info(f"checking for noise {message_id}: '{NOISE[message_id]}'")
         assert_in(NOISE[message_id], decode_or_mumble(res), "noise not found in thread")
 
 
