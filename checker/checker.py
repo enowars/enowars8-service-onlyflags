@@ -520,15 +520,9 @@ async def putnoise0(
     logger: LoggerAdapter,
     conn: Connection,
 ):
-    # First we need to register a user. So let's create some random strings. (Your real checker should use some funny usernames or so)
-    username: str = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
-    password: str = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
+    username, password = gen_account()
 
-    message_id = random.randint(0, len(NOISE))
+    message_id = random.randrange(len(NOISE))
 
     # Register a new user
     await conn.register_user(username, password, True)
