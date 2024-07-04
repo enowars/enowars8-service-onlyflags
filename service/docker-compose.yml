@@ -6,7 +6,7 @@ services:
       - "1080:1080"
     networks:
       db:
-        ipv4_address: 10.6.0.4
+        ipv4_address: 192.168.1.4
       internal_net:
     cap_add:
       - CAP_NET_RAW
@@ -21,7 +21,7 @@ services:
       - 9145:80
     networks:
       db:
-        ipv4_address: 10.6.0.3
+        ipv4_address: 192.168.1.3
     depends_on:
       db:
         condition: service_healthy
@@ -37,9 +37,9 @@ services:
       MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "true"
     networks:
       db:
-        ipv4_address: 10.6.0.2
+        ipv4_address: 192.168.1.2
       db2:
-        ipv4_address: 10.5.0.2
+        ipv4_address: 192.168.2.2
     healthcheck:
       test:  ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
       timeout: 10s
@@ -58,7 +58,7 @@ services:
       DATABASE_URL: "mysql://premium_forum@db/premium_forum"
     networks:
       db2:
-        ipv4_address: 10.5.0.3
+        ipv4_address: 192.168.2.3
       internal_net:
     depends_on:
       db:
@@ -72,7 +72,7 @@ services:
       OPEN_FORUM: "true"
     networks:
       db2:
-        ipv4_address: 10.5.0.4
+        ipv4_address: 192.168.2.4
       internal_net:
     depends_on:
       db:
@@ -83,11 +83,11 @@ networks:
   db:
     ipam:
       config:
-        - subnet: 10.6.0.0/16
+        - subnet: 192.168.1.0/24
   db2:
     ipam:
       config:
-        - subnet: 10.5.0.0/16
+        - subnet: 192.168.2.0/24
 
   internal_net:
     name: test
