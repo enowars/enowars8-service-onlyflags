@@ -179,12 +179,12 @@ class ForumConnection:
                 f"not a TOS violation: '{msg}'",
             )
             try:
-                chunks = res.split(b"censor_data:", 1)
+                chunks = msg.split("censor_data:", 1)
                 if len(chunks) == 1:
                     raise MumbleException("censor_data missing")
                 return [
                     int(c)
-                    for c in decode_or_mumble(chunks[1].split(b"\n")[0]).split(",")
+                    for c in chunks[1].split("\n")[0].split(",")
                 ]
             except ValueError:
                 raise MumbleException("censor_data mangled")
