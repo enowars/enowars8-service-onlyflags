@@ -41,6 +41,10 @@ require '../header.php';
 	<?php } elseif (array_key_exists('error', $_GET)) { ?>
 	<div class="form-message error">failed to sign up!</div>
 	<?php } ?>
+	<div class="ad">
+		<img src="/assets/ad1.png" alt="Free sample with the shirt ;)">
+		<p>Free sampe with the shirt ;)</p>
+	</div>
 </div>
 <div>
 	<h1>ONLYFLAGS</h1>
