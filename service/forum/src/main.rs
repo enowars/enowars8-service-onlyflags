@@ -61,7 +61,7 @@ mod replacer {
         }
 
         /// get the censor parameters
-        /// NOTE: Client should expect more than 2 parameters
+        // NOTE: Clients should expect variable number of parameters
         pub fn get_data(&self) -> String {
             self.a.iter().join(",")
         }
