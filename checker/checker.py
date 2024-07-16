@@ -577,12 +577,7 @@ async def getnoise0(
 async def havoc_test_help(
     task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection
 ):
-    username: str = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
-    password: str = "".join(
-        random.choices(string.ascii_uppercase + string.digits, k=12)
-    )
+    username, password = gen_account()
 
     # Register a new user
     await conn.register_user(username, password, True)
@@ -596,7 +591,7 @@ async def havoc_test_help(
             "SHOW - show a thread",
             "POST - post to current thread",
         ]:
-            assert_in(line.encode(), helpstr, "Received incomplete response.")
+            assert_in(line.encode(), helpstr, "premium-forum: Received incomplete response.")
 
     forum = ForumConnection(task.address, username, password, "premium-forum")
     helpstr = await forum.connect()
