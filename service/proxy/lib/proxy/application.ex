@@ -7,7 +7,7 @@ defmodule Proxy.Application do
       {Task, fn -> Proxy.accept(port) end},
       Proxy.Scheduler,
       {Proxy.UserCache, name: Proxy.UserCache},
-      {MyXQL, username: "proxy", hostname: "db", database: "pod", name: :myxql}
+      {MyXQL, username: "proxy", hostname: "db", database: "pod", name: :myxql, pool_size: 8}
     ]
 
     opts = [strategy: :one_for_one, name: Proxy.Supervisor]
