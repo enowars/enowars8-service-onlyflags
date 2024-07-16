@@ -610,6 +610,45 @@ async def havoc_test_help(
     await forum.close()
 
 
+@checker.havoc(1)
+async def havoc_test_echo(
+    task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection
+):
+    username, password = gen_account()
+
+    await conn.register_user(username, password)
+
+    proxy = Proxy.from_url(
+        f"socks5://{username}:{password}@{task.address}:1080", rdns=True
+    )
+
+    try:
+        sock = await proxy.connect("echo", 1337)
+    except ProxyConnectionError:
+        raise OfflineException("Could not connect to proxy")
+
+    rd, wr = await asyncio.open_connection(
+        host=None,
+        port=None,
+        sock=sock,
+    )
+    motd = await rd.readuntil(b"<3\n")
+
+    for line in [
+        "you have successfully connected to the Onlyflag network.",
+        "Have fun <3"
+    ]:
+        assert_in(line.encode(), motd, "echo: Recieved inclomplete response.")
+
+    for line in map(lambda x: (x+"\n").encode(), gen_account()):
+        wr.write(line)
+        data = await rd.readuntil(b"\n")
+        assert_equals(line, data)
+
+    if wr is not None:
+        wr.close()
+
+
 @checker.exploit(0)
 async def exploit0(
     task: ExploitCheckerTaskMessage,
