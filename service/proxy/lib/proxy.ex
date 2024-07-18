@@ -168,6 +168,7 @@ defmodule Proxy do
       end),
       recv(socket, 2, fn <<0, atyp>> ->
         case atyp do
+          # LOL NO
           # 1 ->
           #  {:ipv4, recv(socket, 4, &(for(<<group <- &1>>, do: group) |> List.to_tuple()))}
 
