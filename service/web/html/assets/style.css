@@ -108,3 +108,13 @@ ul ul {
 .ad img {
 	width: 100%;
 }
+
+.ad-network {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+}
+
+.ad-network img {
+	max-width: 25vw;
+}
