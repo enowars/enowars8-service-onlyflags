@@ -26,7 +26,7 @@ jobs:
         python-version: '3.9'
     - name: Install enochecker_test
       run: |
-        apt install python3-virtualenv
+        apt install -y python3-virtualenv
         virtualenv -p python3 venv
         source venv/bin/activate
         pip install git+https://github.com/RTUnreal/enochecker_test.git@optional_utf8
