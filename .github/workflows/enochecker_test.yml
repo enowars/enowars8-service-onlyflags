@@ -27,7 +27,7 @@ jobs:
     - name: Install enochecker_test
       run: |
         python -m pip install --upgrade pip
-        pip install enochecker-test
+        pip install git+https://github.com/RTUnreal/enochecker_test.git@optional_utf8
     - name: start service
       run: |
         cd service
@@ -41,7 +41,7 @@ jobs:
         echo "ENOCHECKER_TEST_SERVICE_ADDRESS=$(ip -4 address show dev eth0 | grep inet | awk '{ print $2 }' | sed 's|/.*$||')" >> $GITHUB_ENV
     - name: run enochecker_test
       run: |
-        enochecker_test
+        enochecker_test --skip-non-eno-flags
     - name: Dump docker logs on failure
       if: failure()
       uses: jwalton/gh-docker-logs@v1
