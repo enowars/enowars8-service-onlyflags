@@ -43,6 +43,7 @@ jobs:
         echo "ENOCHECKER_TEST_SERVICE_ADDRESS=$(ip -4 address show dev eth0 | grep inet | awk '{ print $2 }' | sed 's|/.*$||')" >> $GITHUB_ENV
     - name: run enochecker_test
       run: |
+        sleep 15 # avoid race conditions where the checks start before the service is ready
         source venv/bin/activate
         enochecker_test --skip-non-eno-flags
     - name: Dump docker logs on failure
