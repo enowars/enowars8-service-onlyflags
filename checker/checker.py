@@ -8,7 +8,7 @@ import base64
 import jwt
 import httpx
 from python_socks.async_.asyncio import Proxy
-from python_socks import ProxyConnectionError
+from python_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
 from bs4 import BeautifulSoup
 
 from typing import Optional, Union, List, Tuple, Dict
@@ -67,6 +67,9 @@ class Connection:
         self.client = client
         self.logger = logger
 
+    def _raise_offline(self):
+        raise OfflineException("web not reachable")
+
     def _verify_302_with_redirect(
         self, res: httpx.Response, redir: str, message: str = "Request failed"
     ):
@@ -85,13 +88,19 @@ class Connection:
 
     async def register_user(self, username: str, password: str, premium: bool = False):
         self.logger.debug(f"register user: {username} with password: {password}")
-        res = await self.client.post(
-            "/", data={"username": username, "password": password}
-        )
+        try:
+            res = await self.client.post(
+                "/", data={"username": username, "password": password}
+            )
+        except (httpx.ConnectTimeout, httpx.NetworkError, httpx.PoolTimeout):
+            self._raise_offline()
         self._verify_302_with_redirect(res, "/?success", "User registration failed")
 
         if premium:
-            res = await self.client.get("/license.php")
+            try:
+                res = await self.client.get("/license.php")
+            except (httpx.ConnectTimeout, httpx.NetworkError, httpx.PoolTimeout):
+                self._raise_offline()
             self._verify_200(res)
             soup = BeautifulSoup(res.text, "html.parser")
             network_span = soup.find(id="network_id")
@@ -104,7 +113,10 @@ class Connection:
                 {"sub": username, "aud": network_id}, priv_key, algorithm="RS256"
             )
             self.logger.debug(f"send license key for user: {username} {key}")
-            res = await self.client.post("/license.php", data={"key": key})
+            try:
+                res = await self.client.post("/license.php", data={"key": key})
+            except (httpx.ConnectTimeout, httpx.NetworkError, httpx.PoolTimeout):
+                self._raise_offline()
             self._verify_302_with_redirect(
                 res, "/license.php?success", "Licensing failed"
             )
@@ -131,7 +143,7 @@ class ForumConnection:
     async def connect(self):
         try:
             sock = await self.proxy.connect(self.service, 1337)
-        except ProxyConnectionError:
+        except (ProxyConnectionError, ProxyError, ProxyTimeoutError):
             raise OfflineException("Could not connect to proxy")
         self.rd, self.wr = await asyncio.open_connection(
             host=None,
@@ -182,10 +194,9 @@ class ForumConnection:
                 chunks = msg.split("censor_data:", 1)
                 if len(chunks) == 1:
                     raise MumbleException("censor_data missing")
-                return [
-                    int(c)
-                    for c in chunks[1].split("\n")[0].split(",")
-                ]
+                if len(chunks) > 6:
+                    raise MumbleException("censor_data malformed")
+                return [int(c) for c in chunks[1].split("\n")[0].split(",")]
             except ValueError:
                 raise MumbleException("censor_data mangled")
         else:
@@ -443,7 +454,7 @@ async def getflag_spambot(
                 n = int.from_bytes(base64.b64decode(f.group(1)), "big")
                 y = sharing.eval_poly(data_chunks + [flag], id, P)
                 if y != n:
-                    raise MumbleException(f"Flag not correct: {n}, {y}")
+                    raise MumbleException("Flag not correct")
                 logger.debug(f"nums: {flag} {y}")
 
 
@@ -591,7 +602,9 @@ async def havoc_test_help(
             "SHOW - show a thread",
             "POST - post to current thread",
         ]:
-            assert_in(line.encode(), helpstr, "premium-forum: Received incomplete response.")
+            assert_in(
+                line.encode(), helpstr, "premium-forum: Received incomplete response."
+            )
 
     forum = ForumConnection(task.address, username, password, "premium-forum")
     helpstr = await forum.connect()
@@ -631,11 +644,11 @@ async def havoc_test_echo(
 
     for line in [
         "you have successfully connected to the Onlyflag network.",
-        "Have fun <3"
+        "Have fun <3",
     ]:
         assert_in(line.encode(), motd, "echo: Recieved inclomplete response.")
 
-    for line in map(lambda x: (x+"\n").encode(), gen_account()):
+    for line in map(lambda x: (x + "\n").encode(), gen_account()):
         wr.write(line)
         data = await rd.readuntil(b"\n")
         assert_equals(line, data)
