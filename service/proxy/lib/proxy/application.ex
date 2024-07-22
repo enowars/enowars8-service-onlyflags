@@ -4,7 +4,7 @@ defmodule Proxy.Application do
 
     children = [
       {Task.Supervisor, name: Proxy.TaskSupervisor},
-      {Task, fn -> Proxy.accept(port) end},
+      {Proxy, port},
       Proxy.Scheduler,
       {Proxy.UserCache, name: Proxy.UserCache},
       {MyXQL, username: "proxy", hostname: "db", database: "pod", name: :myxql, pool_size: 8}

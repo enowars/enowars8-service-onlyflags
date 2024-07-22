@@ -1,5 +1,10 @@
 defmodule Proxy do
+  use Task
   require Logger
+
+  def start_link(port) do
+    Task.start_link(__MODULE__, :accept, [port])
+  end
 
   def accept(port) do
     {:ok, socket} = :gen_tcp.listen(port, [:binary, packet: :raw, active: false, reuseaddr: true])
@@ -50,6 +55,7 @@ defmodule Proxy do
 
       # don't allow connections to restricted services
       service_permissions = Map.get(hosts_acls, host)
+
       if service_permissions != nil and not service_permissions do
         throw_socks_error(
           socket,
