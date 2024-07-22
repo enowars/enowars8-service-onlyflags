@@ -7,7 +7,9 @@ digraph G {
   web ->  "outer network";
   db -> proxy;
   db -> web;
-  premium_forum -> proxy;
-  db -> premium_forum;
+  "premium-forum" -> proxy;
+  db -> "premium-forum";
+  "open-forum" -> proxy;
+  db -> "open-forum";
   "echo" -> proxy;
 }
