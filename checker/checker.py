@@ -525,7 +525,7 @@ NOISE = [
 
 
 @checker.putnoise(0)
-async def putnoise0(
+async def putnoise_premium_forum(
     task: PutnoiseCheckerTaskMessage,
     db: ChainDB,
     logger: LoggerAdapter,
@@ -559,7 +559,7 @@ async def putnoise0(
 
 
 @checker.getnoise(0)
-async def getnoise0(
+async def getnoise_premium_forum(
     task: GetnoiseCheckerTaskMessage,
     db: ChainDB,
     logger: LoggerAdapter,
@@ -584,6 +584,63 @@ async def getnoise0(
         assert_in(NOISE[message_id], decode_or_mumble(res), "noise not found in thread")
 
 
+@checker.putnoise(1)
+async def putnoise_open_forum(
+    task: PutnoiseCheckerTaskMessage,
+    db: ChainDB,
+    logger: LoggerAdapter,
+    conn: Connection,
+):
+    username, password = gen_account()
+
+    message_id = random.randrange(len(NOISE))
+
+    # Register a new user
+    await conn.register_user(username, password, True)
+
+    async with ForumConnection(task.address, username, password, "open-forum", open_forum=True) as forum:
+        await forum.login(username, password)
+        threads = await forum.list_threads()
+        thread_id = (
+            random.choice(threads)
+            if threads != []
+            else "".join(random.choices(string.ascii_uppercase + string.digits, k=12))
+        )
+
+        logger.info(f"joining thread {thread_id}")
+        await forum.join(thread_id)
+
+        logger.info(f"posting noise {message_id}: '{NOISE[message_id]}'")
+        await forum.post(NOISE[message_id])
+
+        # Save the generated values for the associated getflag() call.
+        await db.set("userdata", (username, password, thread_id, message_id))
+
+
+@checker.getnoise(1)
+async def getnoise_open_forum(
+    task: GetnoiseCheckerTaskMessage,
+    db: ChainDB,
+    logger: LoggerAdapter,
+    conn: Connection,
+):
+    try:
+        username, password, thread_id, message_id = await db.get("userdata")
+    except KeyError:
+        raise MumbleException("Putnoise Failed!")
+
+    logger.info("connecting to open-forum")
+    async with ForumConnection(task.address, username, password, "open-forum", open_forum=True) as forum:
+        logger.info(f"joining thread {thread_id}")
+        await forum.join(thread_id)
+
+        logger.info("getting thread")
+        res = await forum.show()
+
+        logger.info(f"checking for noise {message_id}: '{NOISE[message_id]}'")
+        assert_in(NOISE[message_id], decode_or_mumble(res), "noise not found in thread")
+
+
 @checker.havoc(0)
 async def havoc_test_help(
     task: HavocCheckerTaskMessage, logger: LoggerAdapter, conn: Connection
@@ -593,7 +650,7 @@ async def havoc_test_help(
     # Register a new user
     await conn.register_user(username, password, True)
 
-    def test(helpstr):
+    def test(helpstr, open_forum: bool = False):
         for line in [
             "List of commands:",
             "HELP - Show this help",
@@ -601,12 +658,30 @@ async def havoc_test_help(
             "JOIN <thread> - show a thread",
             "SHOW - show a thread",
             "POST - post to current thread",
-        ]:
+        ] + (
+            [
+                "LOGIN <username> - sign into your account",
+                "STALK <username> - see what a specific user has posted",
+            ]
+            if open_forum
+            else []
+        ):
             assert_in(
                 line.encode(), helpstr, "premium-forum: Received incomplete response."
             )
 
     forum = ForumConnection(task.address, username, password, "premium-forum")
+    helpstr = await forum.connect()
+    test(helpstr)
+
+    # In variant 0, we'll check if the help text is available
+    logger.debug("Sending help command")
+    helpstr = await forum.help()
+    test(helpstr)
+
+    await forum.close()
+
+    forum = ForumConnection(task.address, username, password, "open-forum")
     helpstr = await forum.connect()
     test(helpstr)
 
