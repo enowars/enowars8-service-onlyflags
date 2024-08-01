@@ -1,9 +1,14 @@
 # OnlyFlags
 
+OnlyFlags is a microservice network, where two text-tcp-based forums are behind a SOCKS5 proxy.
+
 ## Service topology
 ![service topology](../assets/topology.svg)
 
-## Generate keys for licensing
+All data is stored in the database. The forums and echo server are in a isolatied network.
+
+### Generate keys for licensing
+This should be done before an ctf event, as only the checker should have access to the private key.
 
 ```sh
 openssl genrsa -out jwt_priv.pem 2048
@@ -24,11 +29,13 @@ To test the access the user can use the `echo` service with the port `1337`.
 
 ## Vulnearbilities
 
+both exploits are shown in the `only_exp_*.py` files.
+
 ### 1st vuln in the proxy service
 
 An error in population of the `Proxy.UserCache` in the proxy server makes it possible to access the restricted service for a short period of time after the user registers.
 
-To fix it, a defender can just skip the upserting into the cache and directly reconstruct the access map.
+To fix it, a defender can just skip the upserting into the cache and construct the access map from scratch.
 
 ### 2nd vuln in the (open-)forum service (Shamir's secret censoring)
 
